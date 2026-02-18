@@ -105,11 +105,6 @@ export default function Home({ onLaunch }) {
       {/* Main content */}
       <main className="home-main">
 
-        <div className="home-eyebrow">
-          <span className="home-dot" />
-          Weather Intelligence
-        </div>
-
         <h1 className="home-title">
           {titleText}
           <span className={`home-cursor ${titleDone ? 'home-cursor-blink' : ''}`}>|</span>
