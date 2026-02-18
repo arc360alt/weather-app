@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { WEATHER_CODES } from '../config/defaults'
 import { HourlyChart, WeeklyChart } from './Charts'
+import AlertBanner from './AlertBanner'
 
 function getWeatherInfo(code) {
   return WEATHER_CODES[code] ?? { label: 'Unknown', icon: '🌡️' }
 }
 
-function WindDirection(deg) {
+function windDir(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW']
   return dirs[Math.round(deg / 45) % 8]
 }
@@ -19,12 +20,11 @@ function formatDay(isoString) {
   const d = new Date(isoString)
   const today = new Date()
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === today.toDateString())    return 'Today'
   if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
   return d.toLocaleDateString('en-US', { weekday: 'short' })
 }
 
-// ─── Stat Tile ─────────────────────────────────────────────────────────────────
 function StatTile({ icon, label, value }) {
   return (
     <div className="stat-tile">
@@ -37,7 +37,6 @@ function StatTile({ icon, label, value }) {
   )
 }
 
-// ─── Daily Row ─────────────────────────────────────────────────────────────────
 function DailyRow({ day, code, high, low, precipChance, units }) {
   const { icon, label } = getWeatherInfo(code)
   const tempUnit = units === 'imperial' ? '°F' : '°C'
@@ -54,8 +53,7 @@ function DailyRow({ day, code, high, low, precipChance, units }) {
   )
 }
 
-// ─── Main WeatherPanel ─────────────────────────────────────────────────────────
-export default function WeatherPanel({ weatherData, loading, error, settings, locationName, onSettingsOpen }) {
+export default function WeatherPanel({ weatherData, loading, error, settings, locationName, alerts }) {
   const [chartType, setChartType] = useState(settings.chartType ?? 'temperature')
 
   if (loading) {
@@ -81,42 +79,46 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
     )
   }
 
-  const c = weatherData.current
-  const uvIndex = weatherData.daily?.uv_index_max?.[0] ?? '—'
-  const daily = weatherData.daily
-  const units = settings.units
+  const c       = weatherData.current
+  const daily   = weatherData.daily
+  const units   = settings.units
   const tempUnit = units === 'imperial' ? '°F' : '°C'
   const windUnit = units === 'imperial' ? 'mph' : 'km/h'
+  const uvIndex  = weatherData.daily?.uv_index_max?.[0] ?? '—'
+
+  // Correct field names from Open-Meteo API
   const { icon, label } = getWeatherInfo(c.weather_code)
 
   return (
     <aside className="weather-panel">
-      {/* Header / Current Conditions */}
+
+      {/* Active weather alerts */}
+      {alerts && alerts.length > 0 && (
+        <AlertBanner alerts={alerts} />
+      )}
+
+      {/* Current conditions header */}
       <div className="panel-header">
         <div className="location-name">{locationName ?? 'Current Location'}</div>
         <div className="current-main">
           <span className="current-icon">{icon}</span>
-          <span className="current-temp">
-            {Math.round(c.temperature_2m)}{tempUnit}
-          </span>
+          <span className="current-temp">{Math.round(c.temperature_2m)}{tempUnit}</span>
         </div>
         <div className="current-description">{label}</div>
-        <div className="feels-like">
-          Feels like {Math.round(c.apparent_temperature)}{tempUnit}
-        </div>
+        <div className="feels-like">Feels like {Math.round(c.apparent_temperature)}{tempUnit}</div>
       </div>
 
-      {/* Stat Grid */}
+      {/* Stat grid */}
       <div className="stat-grid">
-        <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${WindDirection(c.wind_direction_10m)}`} />
+        <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
         <StatTile icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} />
         <StatTile icon="🌡️" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
-        <StatTile icon="☀️" label="UV Index"  value={uvIndex} />
+        <StatTile icon="☀️" label="UV Index" value={uvIndex} />
         {daily?.sunrise?.[0] && <StatTile icon="🌅" label="Sunrise" value={formatTime(daily.sunrise[0])} />}
         {daily?.sunset?.[0]  && <StatTile icon="🌇" label="Sunset"  value={formatTime(daily.sunset[0])} />}
       </div>
 
-      {/* Chart Type Tabs */}
+      {/* Hourly chart */}
       {settings.showHourlyChart && (
         <div className="chart-section">
           <div className="chart-tabs">
@@ -132,14 +134,14 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         </div>
       )}
 
-      {/* 7-Day Weekly Chart */}
+      {/* 7-day chart */}
       {settings.show7DayChart && (
         <div className="chart-section">
           <WeeklyChart data={weatherData} units={units} />
         </div>
       )}
 
-      {/* 7-Day Forecast List */}
+      {/* 7-day forecast list */}
       {settings.showDailyForecast && daily && (
         <div className="daily-section">
           <h3 className="section-title">7-Day Forecast</h3>
@@ -155,6 +157,7 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
           ))}
         </div>
       )}
+
     </aside>
   )
 }

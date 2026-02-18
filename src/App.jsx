@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useSettings }   from './hooks/useSettings'
 import { useWeather }    from './hooks/useWeather'
+import { useAlerts }     from './hooks/useAlerts'
 import Map               from './components/Map'
 import WeatherPanel      from './components/WeatherPanel'
 import SettingsPanel     from './components/SettingsPanel'
@@ -10,24 +11,21 @@ import './app.css'
 export default function App() {
   const [settings, updateSettings, resetSettings] = useSettings()
   const { data: weatherData, loading, error }     = useWeather(settings.lat, settings.lon, settings.units)
+  const { alerts }                                = useAlerts(settings.lat, settings.lon)
 
   const [radarFrames,  setRadarFrames]  = useState([])
   const [radarIndex,   setRadarIndex]   = useState(0)
   const [radarPlaying, setRadarPlaying] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-
-  // Stable object — Map attaches .seek and .togglePlay to this once on mount
   const radarControls = useRef({})
 
   const handleMapClick = (lat, lon) => {
     updateSettings({ lat, lon, locationName: `${lat.toFixed(3)}, ${lon.toFixed(3)}` })
   }
 
-const handleFramesChange = (frames, idx) => {
-  console.log('handleFramesChange', frames.length, idx)
-  setRadarFrames(frames)
-  setRadarIndex(idx)
-}
+  const handleFramesChange = (frames, idx) => {
+    setRadarFrames(frames)
+    setRadarIndex(idx)
+  }
 
   const handleSeek = (idx) => {
     setRadarIndex(idx)
@@ -61,7 +59,7 @@ const handleFramesChange = (frames, idx) => {
           error={error}
           settings={settings}
           locationName={settings.locationName}
-          onSettingsOpen={() => setSettingsOpen(true)}
+          alerts={alerts}
         />
       </div>
 
@@ -70,8 +68,6 @@ const handleFramesChange = (frames, idx) => {
           settings={settings}
           onUpdate={updateSettings}
           onReset={resetSettings}
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
         />
       </div>
 
