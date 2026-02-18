@@ -138,7 +138,7 @@ export default function Home({ onLaunch }) {
           <a href="#" onClick={e => { e.preventDefault(); onLaunch() }}>Launch</a>
           <a href="https://open-meteo.com" target="_blank" rel="noreferrer">Weather Data</a>
           <a href="https://www.maptiler.com" target="_blank" rel="noreferrer">Maps</a>
-          <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/arc360alt/weather-app" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </footer>
 
