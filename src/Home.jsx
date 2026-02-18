@@ -13,6 +13,8 @@ const FEATURES = [
   'Click-to-pin any location',
   'Temperature overlays',
   'Zip code & city search',
+  `Free and open source`,
+  `ZERO ads and fast on low end hardware`
 ]
 
 const TYPE_SPEED   = 48   // ms per character typed
