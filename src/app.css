@@ -102,7 +102,7 @@ body {
   color: var(--text-sec);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  margin-bottom: 12px;
+  flex: 1;
 }
 
 .current-main {
@@ -1337,6 +1337,14 @@ body:has(.home-root),
 @keyframes spin-once {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+.panel-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 12px;
 }
 
 /* Retry button in error state */
