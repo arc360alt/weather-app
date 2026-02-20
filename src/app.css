@@ -1412,8 +1412,7 @@ body:has(.home-root),
     align-items: center;
     gap: 7px;
     position: fixed;
-    /* radar bar is ~56px tall at bottom:0; sit 8px above it */
-    bottom: calc(56px + 8px);
+    bottom: calc(56px + 16px);
     left: 16px;
     z-index: 51;
     background: rgba(6,13,23,0.9);
@@ -1458,6 +1457,7 @@ body:has(.home-root),
     gap: 10px;
     min-width: unset;
     z-index: 90; /* below modal (200) */
+    padding-bottom: 16px
   }
 
   /* ── Radar legend: top-left corner on mobile ── */
