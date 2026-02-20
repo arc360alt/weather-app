@@ -1374,7 +1374,7 @@ body:has(.home-root),
     width: 100% !important;
     top: auto !important;
     bottom: 0;
-    height: 65vh;
+    height: 75vh;
     z-index: 50;
     transform: translateY(100%);
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
