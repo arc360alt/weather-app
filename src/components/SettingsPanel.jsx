@@ -190,7 +190,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset }) {
             {settings.locationName && (
               <p className="current-location-display">📍 {settings.locationName}</p>
             )}
-            <p className="settings-hint">Search city, address, or US zip code. Click the map to drop a pin, or use GPS to auto-detect.</p>
+            <p className="settings-hint">Search city or address. Click the map to drop a pin, or use GPS to auto-detect.</p>
           </section>
 
           {/* ── Map ── */}
