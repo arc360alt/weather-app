@@ -28,51 +28,99 @@ export default function SettingsPanel({ settings, onUpdate, onReset }) {
   const [searchInput, setSearchInput] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
+  const [gpsLoading, setGpsLoading] = useState(false)
 
   const set = (key, value) => onUpdate({ [key]: value })
 
-  // Geocode location using Nominatim (free, no key)
-  const handleSearch = async (e) => {
-      e.preventDefault()
-      if (!searchInput.trim()) return
-      setSearching(true)
-      setSearchError(null)
-      try {
-        // Support zip codes by appending "postal code" hint if it looks like one
-        const isZip = /^\d{5}(-\d{4})?$/.test(searchInput.trim())
-        const query = isZip ? `${searchInput.trim()} postal code USA` : searchInput.trim()
-        const resp = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`,
-          { headers: { 'Accept-Language': 'en', 'User-Agent': 'WeatherApp/1.0' } }
-        )
-        const results = await resp.json()
-        if (results.length === 0) {
-          setSearchError('Location not found. Try a city name or full address.')
-        } else {
-          const r = results[0]
-          const addr = r.address
-          // Build a clean display name: "City, State" or "ZIP, City, State"
+  // GPS auto-locate
+  const handleGpsLocate = () => {
+    if (!navigator.geolocation) {
+      setSearchError('Geolocation is not supported by your browser.')
+      return
+    }
+    setGpsLoading(true)
+    setSearchError(null)
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        // Reverse geocode with Nominatim to get a display name
+        try {
+          const resp = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en', 'User-Agent': 'WeatherApp/1.0' } }
+          )
+          const r = await resp.json()
+          const addr = r.address ?? {}
           const parts = [
             addr.city || addr.town || addr.village || addr.county,
             addr.state,
-            addr.country_code?.toUpperCase(),
           ].filter(Boolean)
-          const locationName = isZip
-            ? `${searchInput.trim()}, ${parts.slice(0, 2).join(', ')}`
-            : parts.slice(0, 2).join(', ')
+          const locationName = parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`
+          onUpdate({ lat: latitude, lon: longitude, locationName })
+        } catch {
+          // If reverse geocode fails, just use coordinates
           onUpdate({
-            lat: parseFloat(r.lat),
-            lon: parseFloat(r.lon),
-            locationName,
+            lat: latitude,
+            lon: longitude,
+            locationName: `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`,
           })
-          setSearchInput('')
+        } finally {
+          setGpsLoading(false)
         }
-      } catch (err) {
-        setSearchError('Search failed: ' + err.message)
-      } finally {
-        setSearching(false)
+      },
+      (err) => {
+        setGpsLoading(false)
+        const msgs = {
+          1: 'Location access denied. Please allow location permission.',
+          2: 'Location unavailable. Try searching manually.',
+          3: 'Location request timed out.',
+        }
+        setSearchError(msgs[err.code] ?? 'Failed to get your location.')
+      },
+      { timeout: 10000, maximumAge: 60000 }
+    )
+  }
+
+  // Geocode location using Nominatim (free, no key)
+  const handleSearch = async (e) => {
+    e.preventDefault()
+    if (!searchInput.trim()) return
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const isZip = /^\d{5}(-\d{4})?$/.test(searchInput.trim())
+      const query = isZip ? `${searchInput.trim()} postal code USA` : searchInput.trim()
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'WeatherApp/1.0' } }
+      )
+      const results = await resp.json()
+      if (results.length === 0) {
+        setSearchError('Location not found. Try a city name or full address.')
+      } else {
+        const r = results[0]
+        const addr = r.address
+        const parts = [
+          addr.city || addr.town || addr.village || addr.county,
+          addr.state,
+          addr.country_code?.toUpperCase(),
+        ].filter(Boolean)
+        const locationName = isZip
+          ? `${searchInput.trim()}, ${parts.slice(0, 2).join(', ')}`
+          : parts.slice(0, 2).join(', ')
+        onUpdate({
+          lat: parseFloat(r.lat),
+          lon: parseFloat(r.lon),
+          locationName,
+        })
+        setSearchInput('')
       }
+    } catch (err) {
+      setSearchError('Search failed: ' + err.message)
+    } finally {
+      setSearching(false)
     }
+  }
 
   return (
     <>
@@ -114,15 +162,35 @@ export default function SettingsPanel({ settings, onUpdate, onReset }) {
                 placeholder="Search city or address…"
                 className="settings-input"
               />
-              <button type="submit" disabled={searching} className="search-btn">
+              <button type="submit" disabled={searching} className="search-btn" title="Search">
                 {searching ? '…' : '🔍'}
+              </button>
+              {/* GPS locate button */}
+              <button
+                type="button"
+                className={`search-btn gps-btn ${gpsLoading ? 'gps-btn-loading' : ''}`}
+                onClick={handleGpsLocate}
+                disabled={gpsLoading}
+                title="Use my current location"
+                aria-label="Use GPS location"
+              >
+                {gpsLoading
+                  ? <span className="gps-spinner" />
+                  : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                      <path d="M12 5a7 7 0 1 0 7 7"/>
+                    </svg>
+                  )
+                }
               </button>
             </form>
             {searchError && <p className="settings-error">{searchError}</p>}
-{settings.locationName && (
-  <p className="current-location-display">📍 {settings.locationName}</p>
-)}
-<p className="settings-hint">Supports city names, addresses, or US zip codes. You can also click anywhere on the map to move the pin.</p>
+            {settings.locationName && (
+              <p className="current-location-display">📍 {settings.locationName}</p>
+            )}
+            <p className="settings-hint">Search city, address, or US zip code. Click the map to drop a pin, or use GPS to auto-detect.</p>
           </section>
 
           {/* ── Map ── */}

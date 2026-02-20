@@ -53,7 +53,7 @@ function DailyRow({ day, code, high, low, precipChance, units }) {
   )
 }
 
-export default function WeatherPanel({ weatherData, loading, error, settings, locationName, alerts }) {
+export default function WeatherPanel({ weatherData, loading, error, settings, locationName, alerts, onRefresh }) {
   const [chartType, setChartType] = useState(settings.chartType ?? 'temperature')
 
   if (loading) {
@@ -74,19 +74,23 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
           <span>⚠️</span>
           <p>Failed to load weather</p>
           <small>{error}</small>
+          {onRefresh && (
+            <button className="refresh-btn" onClick={onRefresh}>
+              ↺ Retry
+            </button>
+          )}
         </div>
       </aside>
     )
   }
 
-  const c       = weatherData.current
-  const daily   = weatherData.daily
-  const units   = settings.units
+  const c        = weatherData.current
+  const daily    = weatherData.daily
+  const units    = settings.units
   const tempUnit = units === 'imperial' ? '°F' : '°C'
   const windUnit = units === 'imperial' ? 'mph' : 'km/h'
   const uvIndex  = weatherData.daily?.uv_index_max?.[0] ?? '—'
 
-  // Correct field names from Open-Meteo API
   const { icon, label } = getWeatherInfo(c.weather_code)
 
   return (
@@ -99,7 +103,23 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
 
       {/* Current conditions header */}
       <div className="panel-header">
-        <div className="location-name">{locationName ?? 'Current Location'}</div>
+        <div className="panel-header-top">
+          <div className="location-name">{locationName ?? 'Current Location'}</div>
+          {onRefresh && (
+            <button
+              className="refresh-btn"
+              onClick={onRefresh}
+              title="Refresh weather data"
+              aria-label="Refresh weather"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 4v6h-6"/>
+                <path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="current-main">
           <span className="current-icon">{icon}</span>
           <span className="current-temp">{Math.round(c.temperature_2m)}{tempUnit}</span>

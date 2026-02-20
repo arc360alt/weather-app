@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
 
-const STEP_SEC = 10 * 60  // 10 min steps
+const STEP_SEC         = 10 * 60  // 10 min steps
+const RADAR_REFRESH_MS = 10 * 60 * 1000  // refresh radar every 10 minutes
 
 function getStyleUrl(style) {
   const key = import.meta.env.VITE_MAPTILER_KEY
@@ -42,6 +43,10 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
   const readyRef     = useRef(false)
   const loadingRef   = useRef(false)
 
+  // Auto-refresh timer ref
+  const refreshTimerRef     = useRef(null)
+  const currentLayerTypeRef = useRef(null)
+
   const speedRef        = useRef(settings.animationSpeed)
   const opacityRef      = useRef(settings.layerOpacity)
   const animateRadarRef = useRef(settings.animateRadar)
@@ -74,7 +79,11 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     })
     mapRef.current.once('idle', () => loadLayer(settings.weatherLayer))
     mapRef.current.on('click', (e) => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
-    return () => { stopLoop(); mapRef.current?.remove() }
+    return () => {
+      stopLoop()
+      stopRefreshTimer()
+      mapRef.current?.remove()
+    }
   }, []) // eslint-disable-line
 
   // Fly to location
@@ -100,22 +109,22 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       .setLngLat([settings.lon, settings.lat]).addTo(mapRef.current)
   }, [settings.lat, settings.lon])
 
-// Map style swap
-useEffect(() => {
-  if (!mapRef.current) return
-  loadingRef.current = false  // add this
-  stopLoop(); dropLayer()
-  mapRef.current.setStyle(getStyleUrl(settings.mapStyle))
-  mapRef.current.once('idle', () => loadLayer(settings.weatherLayer))
-}, [settings.mapStyle]) // eslint-disable-line
+  // Map style swap
+  useEffect(() => {
+    if (!mapRef.current) return
+    loadingRef.current = false
+    stopLoop(); stopRefreshTimer(); dropLayer()
+    mapRef.current.setStyle(getStyleUrl(settings.mapStyle))
+    mapRef.current.once('idle', () => loadLayer(settings.weatherLayer))
+  }, [settings.mapStyle]) // eslint-disable-line
 
-// Weather layer swap
-useEffect(() => {
-  if (!mapRef.current?.isStyleLoaded()) return
-  loadingRef.current = false 
-  stopLoop(); dropLayer()
-  loadLayer(settings.weatherLayer)
-}, [settings.weatherLayer]) // eslint-disable-line
+  // Weather layer swap
+  useEffect(() => {
+    if (!mapRef.current?.isStyleLoaded()) return
+    loadingRef.current = false
+    stopLoop(); stopRefreshTimer(); dropLayer()
+    loadLayer(settings.weatherLayer)
+  }, [settings.weatherLayer]) // eslint-disable-line
 
   // Opacity
   useEffect(() => {
@@ -126,6 +135,31 @@ useEffect(() => {
   useEffect(() => {
     if (!pausedRef.current) { stopLoop(); scheduleNext() }
   }, [settings.animationSpeed]) // eslint-disable-line
+
+  // ── Refresh timer ──────────────────────────────────────────────────────────────
+
+  function stopRefreshTimer() {
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+  }
+
+  function startRefreshTimer(layerType) {
+    stopRefreshTimer()
+    if (layerType !== 'radar') return
+
+    refreshTimerRef.current = setInterval(() => {
+      console.log('[Radar] Auto-refreshing radar data…')
+      const wasPlaying = !pausedRef.current
+      loadingRef.current = false
+      stopLoop()
+      dropLayer()
+      loadLayer('radar').then(() => {
+        if (wasPlaying) play()
+      })
+    }, RADAR_REFRESH_MS)
+  }
 
   // ── Animation ─────────────────────────────────────────────────────────────────
 
@@ -171,24 +205,25 @@ useEffect(() => {
 
   // ── Layer ─────────────────────────────────────────────────────────────────────
 
-function dropLayer() {
-  loadingRef.current = false
-  readyRef.current = false
-  stopLoop()
-  if (!layerRef.current || !mapRef.current) return
-  const id = layerRef.current.id ?? layerRef.current
-  try {
-    if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id)
-  } catch (e) {
-    console.warn('removeLayer error:', e)
+  function dropLayer() {
+    loadingRef.current = false
+    readyRef.current = false
+    stopLoop()
+    if (!layerRef.current || !mapRef.current) return
+    const id = layerRef.current.id ?? layerRef.current
+    try {
+      if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id)
+    } catch (e) {
+      console.warn('removeLayer error:', e)
+    }
+    layerRef.current = null
+    onFramesRef.current?.([], 0)
   }
-  layerRef.current = null
-  onFramesRef.current?.([], 0)
-}
 
   async function loadLayer(type) {
     if (loadingRef.current) return
     loadingRef.current = true
+    currentLayerTypeRef.current = type
 
     let mw
     try { mw = await import('@maptiler/weather') }
@@ -205,7 +240,6 @@ function dropLayer() {
     const LayerClass = ClassMap[type]
     if (!LayerClass) { loadingRef.current = false; return }
 
-    // Drop previous layer without resetting loadingRef
     readyRef.current = false
     stopLoop()
     if (layerRef.current && mapRef.current) {
@@ -224,7 +258,6 @@ function dropLayer() {
       if (type === 'radar') {
         await layer.onSourceReadyAsync()
 
-        // Guard: bail if layer was replaced while we were awaiting
         if (layerRef.current !== layer) return
 
         const startSec = layer.getAnimationStart()
@@ -247,13 +280,18 @@ function dropLayer() {
         goToFrame(indexRef.current)
         onFramesRef.current?.(frames, indexRef.current)
 
+        // Start the 10-minute auto-refresh timer
+        startRefreshTimer('radar')
+
         if (animateRadarRef.current) play()
       } else {
         readyRef.current = false
         onFramesRef.current?.([], 0)
+        stopRefreshTimer()
       }
     } catch (e) {
       console.warn('loadLayer error:', e)
+      stopRefreshTimer()
     } finally {
       loadingRef.current = false
     }

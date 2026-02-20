@@ -1,16 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export function useWeather(lat, lon, units = 'metric') {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), [])
 
   useEffect(() => {
     if (lat == null || lon == null) return
 
-    const tempUnit  = units === 'metric' ? 'celsius'    : 'fahrenheit'
-    const windUnit  = units === 'metric' ? 'kmh'        : 'mph'
-    const precipUnit = units === 'metric' ? 'mm'        : 'inch'
+    const tempUnit   = units === 'metric' ? 'celsius'    : 'fahrenheit'
+    const windUnit   = units === 'metric' ? 'kmh'        : 'mph'
+    const precipUnit = units === 'metric' ? 'mm'         : 'inch'
 
     const url =
       `https://api.open-meteo.com/v1/forecast` +
@@ -33,7 +36,7 @@ export function useWeather(lat, lon, units = 'metric') {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(json => { setData(json); setLoading(false) })
       .catch(e  => { setError(e.message); setLoading(false) })
-  }, [lat, lon, units])
+  }, [lat, lon, units, refreshKey])
 
-  return { data, loading, error }
+  return { data, loading, error, refresh }
 }
