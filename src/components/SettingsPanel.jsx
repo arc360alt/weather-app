@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MAP_STYLES, WEATHER_LAYERS, ANIMATION_SPEEDS } from '../config/defaults'
 
 function Row({ label, children }) {
@@ -23,12 +23,36 @@ function Toggle({ checked, onChange }) {
   )
 }
 
-export default function SettingsPanel({ settings, onUpdate, onReset }) {
+/**
+ * SettingsPanel now accepts optional external open control:
+ *   externalOpen        — controlled open state (from App on mobile)
+ *   onExternalOpenChange — callback when panel opens/closes internally
+ *   onOpen              — called before opening, so App can close forecast panel
+ */
+export default function SettingsPanel({ settings, onUpdate, onReset, externalOpen, onExternalOpenChange, onOpen }) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
+
+  // Sync external open state → local
+  useEffect(() => {
+    if (externalOpen !== undefined) {
+      setOpen(externalOpen)
+    }
+  }, [externalOpen])
+
+  const openPanel = () => {
+    onOpen?.()                    // let App close forecast first
+    setOpen(true)
+    onExternalOpenChange?.(true)
+  }
+
+  const closePanel = () => {
+    setOpen(false)
+    onExternalOpenChange?.(false)
+  }
 
   const set = (key, value) => onUpdate({ [key]: value })
 
@@ -126,7 +150,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset }) {
     <>
       {/* Gear Button */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={openPanel}
         className="settings-btn"
         title="Settings"
         aria-label="Open settings"
@@ -139,14 +163,14 @@ export default function SettingsPanel({ settings, onUpdate, onReset }) {
 
       {/* Backdrop */}
       {open && (
-        <div className="settings-backdrop" onClick={() => setOpen(false)} />
+        <div className="settings-backdrop" onClick={closePanel} />
       )}
 
       {/* Panel */}
       <div className={`settings-panel ${open ? 'settings-panel-open' : ''}`}>
         <div className="settings-header">
           <h2>Settings</h2>
-          <button onClick={() => setOpen(false)} className="close-btn" aria-label="Close">✕</button>
+          <button onClick={closePanel} className="close-btn" aria-label="Close">✕</button>
         </div>
 
         <div className="settings-body">

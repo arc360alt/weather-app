@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
 
+body.no-select * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 /* ── Variables ──────────────────────────────────────────────────────────────── */
 :root {
   --bg-deep:    #060d17;
@@ -578,7 +583,7 @@ body {
   box-shadow: 0 8px 40px rgba(0,0,0,0.55);
   width: min(640px, calc(100vw - var(--panel-w) - 60px));
   min-width: 280px;
-  z-index: 1; /* below alert modal (200) so modal renders on top */
+  z-index: 1;
   box-sizing: border-box;
 }
 
@@ -703,6 +708,7 @@ body {
   align-items: center;
   gap: 7px;
   overflow: hidden;
+  justify-content: space-between;
 }
 
 .radar-badge {
@@ -724,6 +730,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1; 
 }
 
 .radar-now-marker {
@@ -762,8 +769,9 @@ body {
 .radar-legend {
   position: fixed;
   left: calc(var(--panel-w) + 16px);
-  bottom: 28px;
-  z-index: 0; 
+  top: 16px;
+  bottom: auto;
+  z-index: 5;
   background: rgba(6, 13, 23, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1143,7 +1151,7 @@ body:has(.home-root),
 .alert-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200; /* above radar bar (90), legend (95), settings (30) */
+  z-index: 200;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
   display: flex;
@@ -1171,7 +1179,7 @@ body:has(.home-root),
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid;
-  flex-shrink: 0;
+  flex-shrink: 0; 
 }
 
 .alert-modal-badges {
@@ -1265,6 +1273,7 @@ body:has(.home-root),
 .alert-modal-body {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -1272,6 +1281,9 @@ body:has(.home-root),
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+.alert-modal-body::-webkit-scrollbar { width: 4px; }
+.alert-modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .alert-modal-section-title {
   font-family: var(--font-mono);
@@ -1362,9 +1374,9 @@ body:has(.home-root),
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   MOBILE  (≤ 768px)
+   MOBILE  (≤ 1328px)
    ══════════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
+@media (max-width: 1328px) {
 
   /* ── Panel: hidden off-bottom by default, slides up when open ── */
   .panel-container {
@@ -1381,6 +1393,7 @@ body:has(.home-root),
     border-radius: 18px 18px 0 0;
     overflow: hidden;
     box-shadow: 0 -12px 48px rgba(0,0,0,0.7);
+    touch-action: pan-x;
   }
 
   .panel-container.panel-mobile-open {
@@ -1392,6 +1405,8 @@ body:has(.home-root),
     border-left: none !important;
     border-top: 1px solid var(--border);
     border-radius: 18px 18px 0 0;
+    touch-action: auto;
+    overscroll-behavior: contain;
   }
 
   /* Drag handle visual */
@@ -1412,9 +1427,9 @@ body:has(.home-root),
     align-items: center;
     gap: 7px;
     position: fixed;
-    bottom: calc(56px + 16px);
+    bottom: calc(56px + 32px);
     left: 16px;
-    z-index: 51;
+    z-index: 1;
     background: rgba(6,13,23,0.9);
     backdrop-filter: blur(12px);
     border: 1px solid var(--border);
@@ -1437,10 +1452,11 @@ body:has(.home-root),
     color: var(--text-pri);
   }
 
-  /* When forecast panel is open, push the toggle above it */
+  /* 
   .mobile-panel-toggle.panel-is-open {
     bottom: calc(65vh + 8px);
   }
+  */
 
   /* ── Radar bar: full-width strip at very bottom ── */
   .radar-bar {
@@ -1456,15 +1472,14 @@ body:has(.home-root),
     padding: 10px 14px env(safe-area-inset-bottom, 0px);
     gap: 10px;
     min-width: unset;
-    z-index: 0; /* below modal (200) */
+    z-index: 0;
     padding-bottom: 16px
   }
 
-  /* ── Radar legend: top-left corner on mobile ── */
+  /* ── Radar legend: top-left corner on mobile (already top on desktop now) ── */
   .radar-legend {
     left: 12px;
     right: auto;
-    bottom: auto;
     top: 12px;
     padding: 8px 10px;
   }

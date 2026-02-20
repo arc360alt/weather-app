@@ -21,9 +21,7 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
 
   // Sync animation ticks into local state — but never while dragging
   useEffect(() => {
-    if (!isDragging.current) {
-      setLocalIndex(currentIndex)
-    }
+    if (!isDragging.current) setLocalIndex(currentIndex)
   }, [currentIndex])
 
   // Initialise when frames first arrive
@@ -41,6 +39,10 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
   const isPast    = frame?.time < nowSec
   const label     = frame ? `${formatDate(frame.time)} · ${formatTime(frame.time)}` : ''
   const fillPct   = frames.length > 1 ? (safeIdx / (frames.length - 1)) * 100 : 0
+
+  const jumpToNow = () => onSeek(frames.findIndex((f, i) =>
+    i === frames.length - 1 || frames[i + 1].time > nowSec
+  ))
 
   return (
     <div className="radar-bar">
@@ -62,12 +64,6 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
         }
       </button>
 
-      <button className="radar-now-btn" onClick={() => onSeek(frames.findIndex((f, i) => 
-  i === frames.length - 1 || frames[i + 1].time > nowSec
-))} title="Jump to now">
-  NOW
-</button>
-
       <div className="radar-timeline">
 
         <div className="radar-zone-labels">
@@ -79,7 +75,7 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
           <div className="radar-track-bg">
             <div className="radar-zone-fill past"    style={{ width: `${pastPct}%` }} />
             <div className="radar-zone-fill nowcast" style={{ width: `${100 - pastPct}%` }} />
-            <div className="radar-now-marker" style={{ left: `${pastPct}%` }} /> 
+            <div className="radar-now-marker" style={{ left: `${pastPct}%` }} />
           </div>
           <div className="radar-progress" style={{ width: `${fillPct}%` }} />
           <input
@@ -104,6 +100,9 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
             {isPast ? '● Past' : '▲ Forecast'}
           </span>
           <span className="radar-time-text">{label}</span>
+          <button className="radar-now-btn" onClick={jumpToNow} title="Jump to now">
+            NOW
+          </button>
         </div>
 
       </div>
