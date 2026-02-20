@@ -7,7 +7,7 @@ import './app.css'
 function Root() {
   const skipHome = new URLSearchParams(window.location.search).has('launch')
   const [launched, setLaunched] = useState(skipHome)
-  return launched ? <App /> : <Home onLaunch={() => setLaunched(true)} />
+  return launched ? <App /> : <App onLaunch={() => setLaunched(true)} />
 }
 
 createRoot(document.getElementById('root')).render(

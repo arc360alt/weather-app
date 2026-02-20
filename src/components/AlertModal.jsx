@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+
 const SEVERITY_COLORS = {
   Extreme:  { bg: '#2d0a0a', border: '#ef4444', badge: '#ef4444', text: '#fca5a5' },
   Severe:   { bg: '#2d1a0a', border: '#f97316', badge: '#f97316', text: '#fdba74' },
@@ -21,12 +23,11 @@ export default function AlertModal({ alert, onClose }) {
   const severity = p.severity ?? 'Unknown'
   const colors   = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.Unknown
 
-  // Close on backdrop click
   const handleBackdrop = (e) => {
     if (e.target === e.currentTarget) onClose()
   }
 
-  return (
+  return createPortal(
     <div className="alert-modal-backdrop" onClick={handleBackdrop}>
       <div className="alert-modal" style={{ borderColor: colors.border }}>
 
@@ -118,6 +119,7 @@ export default function AlertModal({ alert, onClose }) {
         )}
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
