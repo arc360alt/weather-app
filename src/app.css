@@ -1549,10 +1549,6 @@ body:has(.home-root),
     height: 30px;
   }
 
-  .radar-now-btn {
-    display: none;
-  }
-
   .current-temp {
     font-size: 44px;
   }
