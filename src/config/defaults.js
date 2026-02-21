@@ -27,6 +27,10 @@ export const DEFAULT_SETTINGS = {
 
   // Chart preferences
   chartType: 'temperature', // 'temperature' | 'precipitation' | 'wind'
+
+  // Weather provider
+  weatherProvider: 'openmeteo',  // 'openmeteo' | 'openweathermap'
+  owmApiKey: '',
 }
 
 export const MAP_STYLES = [
@@ -49,6 +53,11 @@ export const ANIMATION_SPEEDS = [
   { label: 'Slow',   value: 1 },
   { label: 'Normal', value: 3 },
   { label: 'Fast',   value: 6 },
+]
+
+export const WEATHER_PROVIDERS = [
+  { label: 'Open-Meteo (free, no key)', value: 'openmeteo' },
+  { label: 'OpenWeatherMap',            value: 'openweathermap' },
 ]
 
 // Weather code to human-readable description + icon mapping

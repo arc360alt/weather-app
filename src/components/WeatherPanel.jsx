@@ -165,16 +165,21 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
       {settings.showDailyForecast && daily && (
         <div className="daily-section">
           <h3 className="section-title">7-Day Forecast</h3>
-          {daily.time.map((t, i) => (
-            <DailyRow key={t}
-              day={formatDay(t)}
-              code={daily.weather_code[i]}
-              high={daily.temperature_2m_max[i]}
-              low={daily.temperature_2m_min[i]}
-              precipChance={daily.precipitation_probability_max[i]}
-              units={units}
-            />
-          ))}
+          {daily.time.map((t, i) => {
+            const dayStart = new Date(t)
+            dayStart.setHours(23, 59, 59, 999)
+            if (dayStart < new Date()) return null   // skip past days
+            return (
+              <DailyRow key={t}
+                day={formatDay(t)}
+                code={daily.weather_code[i]}
+                high={daily.temperature_2m_max[i]}
+                low={daily.temperature_2m_min[i]}
+                precipChance={daily.precipitation_probability_max[i]}
+                units={units}
+              />
+            )
+          })}
         </div>
       )}
 

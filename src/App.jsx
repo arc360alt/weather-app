@@ -11,7 +11,7 @@ import './app.css'
 
 export default function App() {
   const [settings, updateSettings, resetSettings] = useSettings()
-  const { data: weatherData, loading, error, refresh } = useWeather(settings.lat, settings.lon, settings.units)
+  const { data: weatherData, loading, error, refresh } = useWeather(settings.lat, settings.lon, settings.units, settings.weatherProvider, settings.owmApiKey)
   const { alerts } = useAlerts(settings.lat, settings.lon)
 
   const [radarFrames,  setRadarFrames]  = useState([])

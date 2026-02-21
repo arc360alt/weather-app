@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MAP_STYLES, WEATHER_LAYERS, ANIMATION_SPEEDS } from '../config/defaults'
+import { MAP_STYLES, WEATHER_LAYERS, ANIMATION_SPEEDS, WEATHER_PROVIDERS } from '../config/defaults'
 
 function Row({ label, children }) {
   return (
@@ -67,7 +67,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords
-        // Reverse geocode with Nominatim to get a display name
         try {
           const resp = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
@@ -82,7 +81,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
           const locationName = parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`
           onUpdate({ lat: latitude, lon: longitude, locationName })
         } catch {
-          // If reverse geocode fails, just use coordinates
           onUpdate({
             lat: latitude,
             lon: longitude,
@@ -273,6 +271,59 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
                   ))}
                 </div>
               </Row>
+            )}
+          </section>
+
+          {/* ── Weather Provider ── */}
+          <section className="settings-section">
+            <h3>Weather Provider</h3>
+            <Row label="Provider">
+              <div className="btn-group">
+                {WEATHER_PROVIDERS.map(p => (
+                  <button
+                    key={p.value}
+                    className={`btn-option ${settings.weatherProvider === p.value ? 'active' : ''}`}
+                    onClick={() => set('weatherProvider', p.value)}
+                  >
+                    {p.value === 'openmeteo' ? 'Open-Meteo' : 'OpenWeatherMap'}
+                  </button>
+                ))}
+              </div>
+            </Row>
+
+            {settings.weatherProvider === 'openweathermap' && (
+              <>
+                <Row label="API Key">
+                  <input
+                    type="password"
+                    className="settings-input"
+                    value={settings.owmApiKey ?? ''}
+                    onChange={e => set('owmApiKey', e.target.value)}
+                    placeholder="Paste your OWM API key…"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </Row>
+                {!settings.owmApiKey && (
+                  <p className="settings-hint" style={{ color: '#f97316' }}>
+                    ⚠ An API key is required. Get a free key at{' '}
+                    <a href="https://openweathermap.org/api" target="_blank" rel="noreferrer"
+                      style={{ color: '#f97316' }}>openweathermap.org</a>.
+                  </p>
+                )}
+                {settings.owmApiKey && (
+                  <p className="settings-hint">
+                    ✓ Key saved. Note: OWM free tier provides 3-hour forecast intervals
+                    and no UV index.
+                  </p>
+                )}
+              </>
+            )}
+
+            {settings.weatherProvider === 'openmeteo' && (
+              <p className="settings-hint">
+                Open-Meteo is free and requires no API key.
+              </p>
             )}
           </section>
 
