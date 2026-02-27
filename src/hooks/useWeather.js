@@ -45,7 +45,7 @@ async function fetchOpenMeteo(lat, lon, units) {
     `&temperature_unit=${tempUnit}` +
     `&wind_speed_unit=${windUnit}` +
     `&precipitation_unit=${precipUnit}` +
-    `&forecast_days=7` +
+    `&forecast_days=8` +
     `&timezone=auto`
 
   const r = await fetch(url)

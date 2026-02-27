@@ -17,9 +17,14 @@ function formatTime(isoString) {
 }
 
 function formatDay(isoString) {
-  const d = new Date(isoString)
+  // Parse as local date by replacing the timezone assumption
+  const [year, month, day] = isoString.split('T')[0].split('-').map(Number)
+  const d = new Date(year, month - 1, day)  // local midnight, no UTC shift
+
   const today = new Date()
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+
   if (d.toDateString() === today.toDateString())    return 'Today'
   if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
   return d.toLocaleDateString('en-US', { weekday: 'short' })
@@ -161,16 +166,26 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         </div>
       )}
 
-      {/* 7-day forecast list */}
-      {settings.showDailyForecast && daily && (
+    {/* 7-day forecast list */}
+    {settings.showDailyForecast && daily && (() => {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      const futureDays = daily.time.reduce((acc, t, i) => {
+        const dayStart = new Date(...t.split('T')[0].split('-').map(Number).map((v, i) => i === 1 ? v - 1 : v))
+        dayStart.setHours(0, 0, 0, 0)
+        if (dayStart >= today) acc.push(i)
+        return acc
+      }, []).slice(0, 7)  // hard cap at 7 days
+
+      return (
         <div className="daily-section">
           <h3 className="section-title">7-Day Forecast</h3>
-          {daily.time.map((t, i) => {
-            const dayStart = new Date(t)
-            dayStart.setHours(23, 59, 59, 999)
-            if (dayStart < new Date()) return null   // skip past days
+          {futureDays.map(i => {
+            const t = daily.time[i]
             return (
-              <DailyRow key={t}
+              <DailyRow
+                key={t}
                 day={formatDay(t)}
                 code={daily.weather_code[i]}
                 high={daily.temperature_2m_max[i]}
@@ -181,7 +196,8 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
             )
           })}
         </div>
-      )}
+      )
+    })()}
 
     </aside>
   )
