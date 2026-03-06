@@ -17,9 +17,8 @@ function formatTime(isoString) {
 }
 
 function formatDay(isoString) {
-  // Parse as local date by replacing the timezone assumption
   const [year, month, day] = isoString.split('T')[0].split('-').map(Number)
-  const d = new Date(year, month - 1, day)  // local midnight, no UTC shift
+  const d = new Date(year, month - 1, day)
 
   const today = new Date()
   const tomorrow = new Date(today)
@@ -137,7 +136,10 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
       <div className="stat-grid">
         <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
         <StatTile icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} />
-        <StatTile icon="🌡️" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
+        {/* Only render pressure when a real value is available — null would produce "0 hPa" */}
+        {c.surface_pressure != null && (
+          <StatTile icon="🌡️" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
+        )}
         <StatTile icon="☀️" label="UV Index" value={uvIndex} />
         {daily?.sunrise?.[0] && <StatTile icon="🌅" label="Sunrise" value={formatTime(daily.sunrise[0])} />}
         {daily?.sunset?.[0]  && <StatTile icon="🌇" label="Sunset"  value={formatTime(daily.sunset[0])} />}
@@ -176,7 +178,7 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         dayStart.setHours(0, 0, 0, 0)
         if (dayStart >= today) acc.push(i)
         return acc
-      }, []).slice(0, 7)  // hard cap at 7 days
+      }, []).slice(0, 7)
 
       return (
         <div className="daily-section">

@@ -7,6 +7,7 @@ import WeatherPanel      from './components/WeatherPanel'
 import SettingsPanel     from './components/SettingsPanel'
 import RadarControls     from './components/RadarControls'
 import RadarLegend       from './components/RadarLegend'
+import NewUpdateModal    from './components/NewUpdateModal'
 import './app.css'
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
   const [radarPlaying, setRadarPlaying] = useState(false)
   const [panelOpen,    setPanelOpen]    = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showChangelog, setShowChangelog] = useState(false)
   const radarControls = useRef({})
 
   // ── Drag-to-close ──────────────────────────────────────────────────────────
@@ -44,7 +46,6 @@ export default function App() {
       if (!d.committed) {
         if (Math.abs(dy) < 6) return
         if (dy < 0) {
-          // Upward — abort, let inner content scroll
           drag.current = null
           el.style.transition = ''
           el.style.transform  = ''
@@ -67,7 +68,6 @@ export default function App() {
       if (dy > 80 || vel > 0.4) setPanelOpenRef.current(false)
     }
 
-    // Touch
     function onTouchStart(e) { start(e.touches[0].clientY) }
     function onTouchMove(e)  {
       if (!drag.current) return
@@ -76,7 +76,6 @@ export default function App() {
     }
     function onTouchEnd(e)   { end(e.changedTouches[0].clientY) }
 
-    // Mouse — move/up on window so fast drags don't lose tracking
     function onMouseDown(e)  { document.body.classList.add('no-select'); start(e.clientY) }
     function onMouseMove(e)  { if (drag.current) move(e.clientY) }
     function onMouseUp(e)    { document.body.classList.remove('no-select'); if (drag.current) end(e.clientY) }
@@ -167,6 +166,7 @@ export default function App() {
           externalOpen={settingsOpen}
           onExternalOpenChange={setSettingsOpen}
           onOpen={openSettings}
+          onShowChangelog={() => setShowChangelog(true)}
         />
       </div>
 
@@ -179,6 +179,8 @@ export default function App() {
           onTogglePlay={handleTogglePlay}
         />
       )}
+
+      <NewUpdateModal forceOpen={showChangelog} onForceClose={() => setShowChangelog(false)} />
 
     </div>
   )

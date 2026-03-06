@@ -29,7 +29,7 @@ function Toggle({ checked, onChange }) {
  *   onExternalOpenChange — callback when panel opens/closes internally
  *   onOpen              — called before opening, so App can close forecast panel
  */
-export default function SettingsPanel({ settings, onUpdate, onReset, externalOpen, onExternalOpenChange, onOpen }) {
+export default function SettingsPanel({ settings, onUpdate, onReset, externalOpen, onExternalOpenChange, onOpen, onShowChangelog }) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [searching, setSearching] = useState(false)
@@ -44,7 +44,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
   }, [externalOpen])
 
   const openPanel = () => {
-    onOpen?.()                    // let App close forecast first
+    onOpen?.()
     setOpen(true)
     onExternalOpenChange?.(true)
   }
@@ -143,6 +143,8 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
       setSearching(false)
     }
   }
+
+  const isNws = settings.weatherProvider === 'nws'
 
   return (
     <>
@@ -279,50 +281,32 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             <h3>Weather Provider</h3>
             <Row label="Provider">
               <div className="btn-group">
-                {WEATHER_PROVIDERS.map(p => (
-                  <button
-                    key={p.value}
-                    className={`btn-option ${settings.weatherProvider === p.value ? 'active' : ''}`}
-                    onClick={() => set('weatherProvider', p.value)}
-                  >
-                    {p.value === 'openmeteo' ? 'Open-Meteo' : 'OpenWeatherMap'}
-                  </button>
-                ))}
+                <button
+                  className={`btn-option ${settings.weatherProvider === 'openmeteo' ? 'active' : ''}`}
+                  onClick={() => set('weatherProvider', 'openmeteo')}
+                >
+                  Open-Meteo
+                </button>
+                <button
+                  className={`btn-option ${settings.weatherProvider === 'nws' ? 'active' : ''}`}
+                  onClick={() => set('weatherProvider', 'nws')}
+                >
+                  NWS
+                </button>
               </div>
             </Row>
 
-            {settings.weatherProvider === 'openweathermap' && (
-              <>
-                <Row label="API Key">
-                  <input
-                    type="password"
-                    className="settings-input"
-                    value={settings.owmApiKey ?? ''}
-                    onChange={e => set('owmApiKey', e.target.value)}
-                    placeholder="Paste your OWM API key…"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </Row>
-                {!settings.owmApiKey && (
-                  <p className="settings-hint" style={{ color: '#f97316' }}>
-                    ⚠ An API key is required. Get a free key at{' '}
-                    <a href="https://openweathermap.org/api" target="_blank" rel="noreferrer"
-                      style={{ color: '#f97316' }}>openweathermap.org</a>.
-                  </p>
-                )}
-                {settings.owmApiKey && (
-                  <p className="settings-hint">
-                    ✓ Key saved. Note: OWM free tier provides 3-hour forecast intervals
-                    and no UV index.
-                  </p>
-                )}
-              </>
-            )}
-
             {settings.weatherProvider === 'openmeteo' && (
               <p className="settings-hint">
-                Open-Meteo is free and requires no API key.
+                Open-Meteo is free, requires no API key, and works worldwide.
+              </p>
+            )}
+
+            {isNws && (
+              <p className="settings-hint">
+                National Weather Service — free, no API key, highly accurate.{' '}
+                <span style={{ color: '#f97316' }}>⚠ US locations only.</span>{' '}
+                Switch to Open-Meteo for international locations.
               </p>
             )}
           </section>
@@ -370,10 +354,16 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             </Row>
           </section>
 
-          {/* ── Reset ── */}
-          <section className="settings-section">
+          {/* ── Footer actions ── */}
+          <section className="settings-section settings-footer-actions">
             <button onClick={onReset} className="reset-btn">
               ↺ Reset to Defaults
+            </button>
+            <button
+              onClick={() => { closePanel(); onShowChangelog?.() }}
+              className="changelog-btn"
+            >
+              🎉 What's New
             </button>
           </section>
 

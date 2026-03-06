@@ -1,2 +1,10 @@
 # weather-app
 Its in the name, a simple weather app with a radar.
+
+# Features:
+- NWS and OpenMetro API Intigrations
+- Full on weather radar with a bunch of diffrent layers
+- Lots of options to customise the UI
+- Full on Android App with widgets
+- Easy to use and works on mobile witht the website
+- Open source and free with no ads!
