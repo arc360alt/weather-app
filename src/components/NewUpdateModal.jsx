@@ -13,7 +13,7 @@ const UPDATES = [
   {
     id:      'v1.5-2026-03-05',
     date:    'March 5, 2026',
-    expires: '03-05-2026',
+    expires: '03-20-2026',
     version: 'v1.5',
     title:   'NWS Integration + Wind Accuracy',
     items: [
@@ -39,7 +39,7 @@ export default function NewUpdateModal({ forceOpen, onForceClose }) {
   const updateRef = useRef(null)
   if (updateRef.current === null) {
     updateRef.current = forceOpen
-      ? UPDATES.find(u => new Date(u.expires) >= new Date()) ?? null
+        ? UPDATES[0] ?? null 
       : UPDATES.find(u => {
           if (new Date(u.expires) < new Date()) return false
           if (localStorage.getItem(STORAGE_KEY(u.id))) return false
@@ -49,7 +49,7 @@ export default function NewUpdateModal({ forceOpen, onForceClose }) {
   // Re-snapshot when forceOpen changes (user opens from Settings button)
   const prevForceOpen = useRef(forceOpen)
   if (forceOpen && !prevForceOpen.current) {
-    updateRef.current = UPDATES.find(u => new Date(u.expires) >= new Date()) ?? null
+      updateRef.current = UPDATES[0] ?? null 
   }
   prevForceOpen.current = forceOpen
   const update = updateRef.current
