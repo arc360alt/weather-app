@@ -1,28 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  EDIT HERE — add new updates at the TOP of the array
-//  id:        unique string per release — changing it resets "don't show again"
-//  date:      display date shown in the modal header
-//  expires:   ISO date string — modal won't show AT ALL after this date
-//  version:   label shown in the badge  (e.g. "v2.1")
-//  title:     bold headline
-//  items:     array of { icon, text } changelog bullets
-// ─────────────────────────────────────────────────────────────────────────────
 const UPDATES = [
   {
-    id:      'v1.5-2026-03-05',
-    date:    'March 5, 2026',
-    expires: '03-20-2026',
-    version: 'v1.5',
-    title:   'NWS Integration + Wind Accuracy',
+    id:      'v1.6-2026-03-06',
+    date:    'March 6, 2026',
+    expires: '03-22-2026',
+    version: 'v1.6',
+    title:   '7 Day Charts fixed',
     items: [
-      { icon: '🌐', text: 'Added National Weather Service as a free, no-key weather provider (US only)' },
-      { icon: '💨', text: 'Hourly wind now pulls from gridpoint data, exact values instead of 5 mph steps' },
+      { icon: '🌐', text: 'Fixed the 7 day charts to work on all precipitation and wind now.' },
+      // { icon: '💨', text: 'Hourly wind now pulls from gridpoint data, exact values instead of 5 mph steps' },
       // { icon: '🌡️', text: 'Current conditions (wind, humidity, pressure) now come from live observation stations' },
-      { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
-      { icon: '🕐', text: 'Fixed all timestamp handling' },
-      { icon: '🗑️', text: 'Removed OpenWeatherMap provider' },
+      // { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
+      // { icon: '🕐', text: 'Fixed all timestamp handling' },
+      { icon: '🔧', text: 'Simple bug fixes' },
     ],
   },
 ]

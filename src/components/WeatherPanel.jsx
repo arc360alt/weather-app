@@ -136,7 +136,6 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
       <div className="stat-grid">
         <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
         <StatTile icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} />
-        {/* Only render pressure when a real value is available — null would produce "0 hPa" */}
         {c.surface_pressure != null && (
           <StatTile icon="🌡️" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
         )}
@@ -145,61 +144,63 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         {daily?.sunset?.[0]  && <StatTile icon="🌇" label="Sunset"  value={formatTime(daily.sunset[0])} />}
       </div>
 
-      {/* Hourly chart */}
-      {settings.showHourlyChart && (
+      {/* Charts — shared tabs control both hourly and weekly */}
+      {(settings.showHourlyChart || settings.show7DayChart) && (
         <div className="chart-section">
           <div className="chart-tabs">
             {['temperature', 'precipitation', 'wind'].map(t => (
-              <button key={t}
+              <button
+                key={t}
                 className={`chart-tab ${chartType === t ? 'active' : ''}`}
-                onClick={() => setChartType(t)}>
+                onClick={() => setChartType(t)}
+              >
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
-          <HourlyChart data={weatherData} units={units} chartType={chartType} />
+
+          {settings.showHourlyChart && (
+            <HourlyChart data={weatherData} units={units} chartType={chartType} />
+          )}
+
+          {settings.show7DayChart && (
+            <WeeklyChart data={weatherData} units={units} chartType={chartType} />
+          )}
         </div>
       )}
 
-      {/* 7-day chart */}
-      {settings.show7DayChart && (
-        <div className="chart-section">
-          <WeeklyChart data={weatherData} units={units} />
-        </div>
-      )}
+      {/* 7-day forecast list */}
+      {settings.showDailyForecast && daily && (() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
 
-    {/* 7-day forecast list */}
-    {settings.showDailyForecast && daily && (() => {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+        const futureDays = daily.time.reduce((acc, t, i) => {
+          const dayStart = new Date(...t.split('T')[0].split('-').map(Number).map((v, i) => i === 1 ? v - 1 : v))
+          dayStart.setHours(0, 0, 0, 0)
+          if (dayStart >= today) acc.push(i)
+          return acc
+        }, []).slice(0, 7)
 
-      const futureDays = daily.time.reduce((acc, t, i) => {
-        const dayStart = new Date(...t.split('T')[0].split('-').map(Number).map((v, i) => i === 1 ? v - 1 : v))
-        dayStart.setHours(0, 0, 0, 0)
-        if (dayStart >= today) acc.push(i)
-        return acc
-      }, []).slice(0, 7)
-
-      return (
-        <div className="daily-section">
-          <h3 className="section-title">7-Day Forecast</h3>
-          {futureDays.map(i => {
-            const t = daily.time[i]
-            return (
-              <DailyRow
-                key={t}
-                day={formatDay(t)}
-                code={daily.weather_code[i]}
-                high={daily.temperature_2m_max[i]}
-                low={daily.temperature_2m_min[i]}
-                precipChance={daily.precipitation_probability_max[i]}
-                units={units}
-              />
-            )
-          })}
-        </div>
-      )
-    })()}
+        return (
+          <div className="daily-section">
+            <h3 className="section-title">7-Day Forecast</h3>
+            {futureDays.map(i => {
+              const t = daily.time[i]
+              return (
+                <DailyRow
+                  key={t}
+                  day={formatDay(t)}
+                  code={daily.weather_code[i]}
+                  high={daily.temperature_2m_max[i]}
+                  low={daily.temperature_2m_min[i]}
+                  precipChance={daily.precipitation_probability_max[i]}
+                  units={units}
+                />
+              )
+            })}
+          </div>
+        )
+      })()}
 
     </aside>
   )
