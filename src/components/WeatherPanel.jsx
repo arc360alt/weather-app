@@ -29,6 +29,13 @@ function formatDay(isoString) {
   return d.toLocaleDateString('en-US', { weekday: 'short' })
 }
 
+function resolvePrecipProb(max, min, mode) {
+  if (mode === 'max') return max
+  if (mode === 'min') return min ?? max
+  const avg = min != null ? (max + min) / 2 : max
+  return Math.round(avg / 5) * 5
+}
+
 function StatTile({ icon, label, value }) {
   return (
     <div className="stat-tile">
@@ -94,18 +101,17 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
   const tempUnit = units === 'imperial' ? '°F' : '°C'
   const windUnit = units === 'imperial' ? 'mph' : 'km/h'
   const uvIndex  = weatherData.daily?.uv_index_max?.[0] ?? '—'
+  const precipDisplayMode = settings.precipDisplay ?? 'average'
 
   const { icon, label } = getWeatherInfo(c.weather_code)
 
   return (
     <aside className="weather-panel">
 
-      {/* Active weather alerts */}
       {alerts && alerts.length > 0 && (
         <AlertBanner alerts={alerts} />
       )}
 
-      {/* Current conditions header */}
       <div className="panel-header">
         <div className="panel-header-top">
           <div className="location-name">{locationName ?? 'Current Location'}</div>
@@ -132,7 +138,6 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         <div className="feels-like">Feels like {Math.round(c.apparent_temperature)}{tempUnit}</div>
       </div>
 
-      {/* Stat grid */}
       <div className="stat-grid">
         <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
         <StatTile icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} />
@@ -144,7 +149,6 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
         {daily?.sunset?.[0]  && <StatTile icon="🌇" label="Sunset"  value={formatTime(daily.sunset[0])} />}
       </div>
 
-      {/* Charts — shared tabs control both hourly and weekly */}
       {(settings.showHourlyChart || settings.show7DayChart) && (
         <div className="chart-section">
           <div className="chart-tabs">
@@ -164,12 +168,11 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
           )}
 
           {settings.show7DayChart && (
-            <WeeklyChart data={weatherData} units={units} chartType={chartType} />
+            <WeeklyChart data={weatherData} units={units} chartType={chartType} precipDisplayMode={precipDisplayMode} />
           )}
         </div>
       )}
 
-      {/* 7-day forecast list */}
       {settings.showDailyForecast && daily && (() => {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
@@ -186,6 +189,11 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
             <h3 className="section-title">7-Day Forecast</h3>
             {futureDays.map(i => {
               const t = daily.time[i]
+              const precipChance = resolvePrecipProb(
+                daily.precipitation_probability_max[i],
+                daily.precipitation_probability_min?.[i] ?? null,
+                precipDisplayMode
+              )
               return (
                 <DailyRow
                   key={t}
@@ -193,7 +201,7 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
                   code={daily.weather_code[i]}
                   high={daily.temperature_2m_max[i]}
                   low={daily.temperature_2m_min[i]}
-                  precipChance={daily.precipitation_probability_max[i]}
+                  precipChance={precipChance}
                   units={units}
                 />
               )

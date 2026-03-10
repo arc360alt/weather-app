@@ -23,12 +23,6 @@ function Toggle({ checked, onChange }) {
   )
 }
 
-/**
- * SettingsPanel now accepts optional external open control:
- *   externalOpen        — controlled open state (from App on mobile)
- *   onExternalOpenChange — callback when panel opens/closes internally
- *   onOpen              — called before opening, so App can close forecast panel
- */
 export default function SettingsPanel({ settings, onUpdate, onReset, externalOpen, onExternalOpenChange, onOpen, onShowChangelog }) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
@@ -36,7 +30,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
   const [searchError, setSearchError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
 
-  // Sync external open state → local
   useEffect(() => {
     if (externalOpen !== undefined) {
       setOpen(externalOpen)
@@ -56,7 +49,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
 
   const set = (key, value) => onUpdate({ [key]: value })
 
-  // GPS auto-locate
   const handleGpsLocate = () => {
     if (!navigator.geolocation) {
       setSearchError('Geolocation is not supported by your browser.')
@@ -103,7 +95,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
     )
   }
 
-  // Geocode location using Nominatim (free, no key)
   const handleSearch = async (e) => {
     e.preventDefault()
     if (!searchInput.trim()) return
@@ -148,7 +139,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
 
   return (
     <>
-      {/* Gear Button */}
       <button
         onClick={openPanel}
         className="settings-btn"
@@ -161,12 +151,10 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
         </svg>
       </button>
 
-      {/* Backdrop */}
       {open && (
         <div className="settings-backdrop" onClick={closePanel} />
       )}
 
-      {/* Panel */}
       <div className={`settings-panel ${open ? 'settings-panel-open' : ''}`}>
         <div className="settings-header">
           <h2>Settings</h2>
@@ -175,7 +163,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
 
         <div className="settings-body">
 
-          {/* ── Location ── */}
           <section className="settings-section">
             <h3>Location</h3>
             <form onSubmit={handleSearch} className="search-form">
@@ -189,7 +176,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
               <button type="submit" disabled={searching} className="search-btn" title="Search">
                 {searching ? '…' : '🔍'}
               </button>
-              {/* GPS locate button */}
               <button
                 type="button"
                 className={`search-btn gps-btn ${gpsLoading ? 'gps-btn-loading' : ''}`}
@@ -217,7 +203,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             <p className="settings-hint">Search city or address. Click the map to drop a pin, or use GPS to auto-detect.</p>
           </section>
 
-          {/* ── Map ── */}
           <section className="settings-section">
             <h3>Map</h3>
             <Row label="Style">
@@ -254,7 +239,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             </Row>
           </section>
 
-          {/* ── Radar ── */}
           <section className="settings-section">
             <h3>Radar Animation</h3>
             <Row label="Animate Radar">
@@ -276,7 +260,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             )}
           </section>
 
-          {/* ── Weather Provider ── */}
           <section className="settings-section">
             <h3>Weather Provider</h3>
             <Row label="Provider">
@@ -311,7 +294,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             )}
           </section>
 
-          {/* ── Units ── */}
           <section className="settings-section">
             <h3>Units</h3>
             <Row label="Temperature">
@@ -328,7 +310,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             </Row>
           </section>
 
-          {/* ── UI ── */}
           <section className="settings-section">
             <h3>Display</h3>
             <Row label="Panel Side">
@@ -343,6 +324,25 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
                 >Right</button>
               </div>
             </Row>
+            <Row label="Rain Chance">
+              <div className="btn-group">
+                <button
+                  className={`btn-option ${(settings.precipDisplay ?? 'average') === 'average' ? 'active' : ''}`}
+                  onClick={() => set('precipDisplay', 'average')}
+                >Avg</button>
+                <button
+                  className={`btn-option ${settings.precipDisplay === 'max' ? 'active' : ''}`}
+                  onClick={() => set('precipDisplay', 'max')}
+                >Max</button>
+                <button
+                  className={`btn-option ${settings.precipDisplay === 'min' ? 'active' : ''}`}
+                  onClick={() => set('precipDisplay', 'min')}
+                >Min</button>
+              </div>
+            </Row>
+            <p className="settings-hint">
+              Avg shows a representative daily chance. Max is the highest 12-hr window, Min is the lowest.
+            </p>
             <Row label="Hourly Chart">
               <Toggle checked={settings.showHourlyChart} onChange={v => set('showHourlyChart', v)} />
             </Row>
@@ -354,7 +354,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             </Row>
           </section>
 
-          {/* ── Footer actions ── */}
           <section className="settings-section settings-footer-actions">
             <button onClick={onReset} className="reset-btn">
               ↺ Reset to Defaults

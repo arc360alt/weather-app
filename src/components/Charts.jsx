@@ -9,6 +9,7 @@ import {
 const COLORS = {
   temperature:   '#f97316',
   precipitation: '#38bdf8',
+  precipMin:     '#7dd3fc',
   wind:          '#a78bfa',
 }
 
@@ -22,11 +23,10 @@ function formatHour(isoString) {
 
 function formatDay(isoString) {
   const [year, month, day] = isoString.split('T')[0].split('-').map(Number)
-  const d = new Date(year, month - 1, day) // local midnight — no UTC shift
+  const d = new Date(year, month - 1, day)
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-// Returns true if an array has at least one non-null, finite value
 function hasData(arr) {
   return Array.isArray(arr) && arr.some(v => v != null && isFinite(v))
 }
@@ -48,9 +48,8 @@ export function HourlyChart({ data, units, chartType = 'temperature' }) {
     wind:         slice(wind_speed_10m)[i],
   }))
 
-  const tempUnit = units === 'imperial' ? '°F' : '°C'
-  const windUnit = units === 'imperial' ? 'mph' : 'km/h'
-  const precipUnit = units === 'imperial' ? 'in' : 'mm'
+  const tempUnit  = units === 'imperial' ? '°F' : '°C'
+  const windUnit  = units === 'imperial' ? 'mph' : 'km/h'
   const tick    = { fill: '#94a3b8', fontSize: 10 }
   const tooltip = { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }
 
@@ -117,17 +116,17 @@ export function WeeklyChart({ data, units, chartType = 'temperature' }) {
     temperature_2m_min,
     precipitation_sum,
     precipitation_probability_max,
+    precipitation_probability_min,
     wind_speed_10m_max,
     wind_speed_10m_min,
   } = data.daily
 
-  const tempUnit  = units === 'imperial' ? '°F' : '°C'
-  const windUnit  = units === 'imperial' ? 'mph' : 'km/h'
+  const tempUnit   = units === 'imperial' ? '°F' : '°C'
+  const windUnit   = units === 'imperial' ? 'mph' : 'km/h'
   const precipUnit = units === 'imperial' ? 'in' : 'mm'
   const tick    = { fill: '#94a3b8', fontSize: 10 }
   const tooltip = { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }
 
-  // ── Temperature (always available) ──────────────────────────────────────────
   if (chartType === 'temperature') {
     const chartData = time.map((t, i) => ({
       day: formatDay(t),
@@ -152,13 +151,11 @@ export function WeeklyChart({ data, units, chartType = 'temperature' }) {
     )
   }
 
-  // ── Precipitation ────────────────────────────────────────────────────────────
   if (chartType === 'precipitation') {
-    // Prefer precipitation_sum; fall back to precipitation_probability_max
     const hasPrecipSum  = hasData(precipitation_sum)
     const hasPrecipProb = hasData(precipitation_probability_max)
 
-    if (!hasPrecipSum && !hasPrecipProb) return null // provider doesn't support it
+    if (!hasPrecipSum && !hasPrecipProb) return null
 
     if (hasPrecipSum) {
       const chartData = time.map((t, i) => ({
@@ -186,40 +183,42 @@ export function WeeklyChart({ data, units, chartType = 'temperature' }) {
       )
     }
 
-    // Fallback: show probability bars when sum isn't available
+    const hasMin = hasData(precipitation_probability_min)
     const chartData = time.map((t, i) => ({
       day:          formatDay(t),
-      precipChance: precipitation_probability_max[i] ?? 0,
+      precipMax:    precipitation_probability_max[i] ?? 0,
+      precipMin:    hasMin ? (precipitation_probability_min[i] ?? 0) : undefined,
     }))
+
     return (
       <div>
         <p className="chart-label">7-Day Precipitation Chance (%)</p>
         <ResponsiveContainer width="100%" height={130}>
-          <BarChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis dataKey="day" tick={tick} />
             <YAxis tick={tick} domain={[0, 100]} />
             <Tooltip
               contentStyle={tooltip}
               labelStyle={{ color: '#94a3b8' }}
-              itemStyle={{ color: COLORS.precipitation }}
-              formatter={v => [`${v}%`, 'Precip Chance']}
+              formatter={(v, name) => [`${v}%`, name === 'precipMax' ? 'Max Chance' : 'Min Chance']}
             />
-            <Bar dataKey="precipChance" fill={COLORS.precipitation} radius={[3, 3, 0, 0]} />
-          </BarChart>
+            <Line type="monotone" dataKey="precipMax" stroke={COLORS.precipitation} strokeWidth={2} dot={{ r: 3 }} name="precipMax" />
+            {hasMin && (
+              <Line type="monotone" dataKey="precipMin" stroke={COLORS.precipMin} strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3 }} name="precipMin" />
+            )}
+          </LineChart>
         </ResponsiveContainer>
       </div>
     )
   }
 
-  // ── Wind ─────────────────────────────────────────────────────────────────────
   if (chartType === 'wind') {
-    if (!hasData(wind_speed_10m_max)) return null // provider doesn't support it
+    if (!hasData(wind_speed_10m_max)) return null
 
     const hasMin = hasData(wind_speed_10m_min)
-
     const chartData = time.map((t, i) => ({
-      day:    formatDay(t),
+      day:     formatDay(t),
       windMax: wind_speed_10m_max[i] ?? 0,
       windMin: hasMin ? (wind_speed_10m_min[i] ?? 0) : undefined,
     }))

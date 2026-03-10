@@ -36,10 +36,6 @@ function obsWindToDisplay(value, unitCode, units) {
     : Math.round(kmh * 10) / 10
 }
 
-/**
- * Expand the gridData time-series format into a Map keyed by UTC hour string "YYYY-MM-DDTHH".
- * Each entry covers one or more hours; we expand each interval into individual hour keys.
- */
 function expandGridSeries(values) {
   const map = new Map()
   for (const { validTime, value } of values) {
@@ -49,26 +45,40 @@ function expandGridSeries(values) {
     const hours = parseInt(duration.match(/PT?(\d+)H/)?.[1] ?? '1')
     for (let i = 0; i < hours; i++) {
       const d = new Date(start.getTime() + i * 3600000)
-      const key = d.toISOString().slice(0, 13) // "YYYY-MM-DDTHH"
+      const key = d.toISOString().slice(0, 13)
       map.set(key, value)
     }
   }
   return map
 }
 
-/**
- * From an hourly UTC-keyed map, derive a per-LOCAL-date max value.
- * localDateKeys is the ordered array of "YYYY-MM-DD" strings we want to fill.
- * timeZone is the IANA tz string (e.g. "America/Chicago") for local-date conversion.
- */
+function dailyPrecipSumFromGrid(values, localDateKeys, timeZone, toDisplayUnit) {
+  const sumByDate = new Map()
+  for (const { validTime, value } of values) {
+    if (value == null || value === 0) continue
+    const isoStart = validTime.split('/')[0]
+    const utcDate = new Date(isoStart)
+    let localDate
+    try {
+      localDate = utcDate.toLocaleDateString('en-CA', { timeZone })
+    } catch {
+      localDate = utcDate.toISOString().slice(0, 10)
+    }
+    sumByDate.set(localDate, (sumByDate.get(localDate) ?? 0) + value)
+  }
+  return localDateKeys.map(d => {
+    const raw = sumByDate.get(d)
+    return raw != null ? Math.round(toDisplayUnit(raw) * 100) / 100 : 0
+  })
+}
+
 function dailyMaxFromHourlyMap(hourlyMap, localDateKeys, timeZone) {
   const maxByDate = new Map()
   for (const [utcHourKey, value] of hourlyMap) {
-    // Convert "YYYY-MM-DDTHH" UTC key → local date string
     const utcDate = new Date(`${utcHourKey}:00:00Z`)
     let localDate
     try {
-      localDate = utcDate.toLocaleDateString('en-CA', { timeZone }) // "YYYY-MM-DD"
+      localDate = utcDate.toLocaleDateString('en-CA', { timeZone })
     } catch {
       localDate = utcDate.toISOString().slice(0, 10)
     }
@@ -79,10 +89,6 @@ function dailyMaxFromHourlyMap(hourlyMap, localDateKeys, timeZone) {
   return localDateKeys.map(d => maxByDate.get(d) ?? null)
 }
 
-/**
- * From an hourly UTC-keyed map, derive a per-LOCAL-date MIN value.
- * Used for wind speed daily minimum.
- */
 function dailyMinFromHourlyMap(hourlyMap, localDateKeys, timeZone) {
   const minByDate = new Map()
   for (const [utcHourKey, value] of hourlyMap) {
@@ -141,7 +147,25 @@ async function fetchOpenMeteo(lat, lon, units) {
     `&forecast_days=8&timezone=auto`
   const r = await fetch(url)
   if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`)
-  return r.json()
+  const json = await r.json()
+
+  const hourly    = json.hourly
+  const dailyTime = json.daily.time
+  const tz        = json.timezone
+
+  let precipProbMin = dailyTime.map(() => null)
+  if (hourly?.precipitation_probability && hourly?.time) {
+    const probMap = new Map()
+    hourly.time.forEach((t, i) => {
+      const v = hourly.precipitation_probability[i]
+      if (v == null) return
+      probMap.set(new Date(t).toISOString().slice(0, 13), v)
+    })
+    precipProbMin = dailyMinFromHourlyMap(probMap, dailyTime, tz)
+  }
+
+  json.daily.precipitation_probability_min = precipProbMin
+  return json
 }
 
 async function fetchBestObservation(stationsUrl, headers) {
@@ -200,33 +224,24 @@ async function fetchNWS(lat, lon, units) {
   if (!hourlyPeriods?.length) throw new Error('NWS returned no hourly data.')
   if (!dailyPeriods?.length)  throw new Error('NWS returned no daily data.')
 
-  // Parse gridData — windSpeed for daily wind max/min, probabilityOfPrecipitation for daily precip %.
-  // windSpeed is always wmoUnit:km_h-1. probabilityOfPrecipitation is wmoUnit:percent.
-  // We deliberately do NOT use quantitativePrecipitation — QPF values are 6-hourly totals that
-  // frequently read 0 even when probability is high, which contradicts the forecast text.
-  let gridWindMap = null
-  let gridPrecipProbMap = null
+  let gridWindMap   = null
+  let gridQPFValues = null
 
   if (gridRes?.ok) {
     try {
       const gridData = await gridRes.json()
       const props = gridData.properties ?? {}
-
-      if (props.windSpeed?.values?.length) {
+      if (props.windSpeed?.values?.length)
         gridWindMap = expandGridSeries(props.windSpeed.values)
-      }
-      if (props.probabilityOfPrecipitation?.values?.length) {
-        gridPrecipProbMap = expandGridSeries(props.probabilityOfPrecipitation.values)
-      }
+      if (props.quantitativePrecipitation?.values?.length)
+        gridQPFValues = props.quantitativePrecipitation.values
     } catch { /* non-fatal */ }
   }
 
-  // Convert km/h grid wind value to display unit
   const gridWindToDisplay = (kmh) => units === 'imperial'
     ? Math.round(kmh / 1.60934 * 10) / 10
     : Math.round(kmh * 10) / 10
 
-  // Build hourly arrays
   const hourlyTime = [], hourlyTemp = [], hourlyPrecipProb = []
   const hourlyPrecip = [], hourlyWind = [], hourlyWeatherCode = [], hourlyHumidity = []
 
@@ -250,7 +265,6 @@ async function fetchNWS(lat, lon, units) {
     hourlyHumidity.push(p.relativeHumidity?.value ?? null)
   }
 
-  // Current conditions from live observation, fall back to first hourly period
   const firstP = hourlyPeriods[0]
 
   let currentTemp = hourlyTemp[0]
@@ -287,7 +301,6 @@ async function fetchNWS(lat, lon, units) {
     ? nwsForecastToWmo(obsProps.textDescription)
     : hourlyWeatherCode[0]
 
-  // Daily arrays from alternating day/night pairs
   const dayMap = new Map()
   for (const p of dailyPeriods) {
     const key = localDateKey(toLocalIso(p.startTime))
@@ -295,7 +308,8 @@ async function fetchNWS(lat, lon, units) {
     dayMap.get(key).push(p)
   }
 
-  const dailyTime = [], dailyMax = [], dailyMin = [], dailyPrecipProbMax = []
+  const dailyTime = [], dailyMax = [], dailyMin = []
+  const dailyPrecipProbMax = [], dailyPrecipProbMin = []
   const dailyCode = [], dailySunrise = [], dailySunset = []
 
   for (const [dateKey, periods] of [...dayMap.entries()].sort(([a],[b]) => a < b ? -1 : 1)) {
@@ -307,10 +321,12 @@ async function fetchNWS(lat, lon, units) {
     dailyTime.push(dateKey)
     dailyMax.push(toTemp(dayP   ? dayP.temperature   : nightP.temperature + 10))
     dailyMin.push(toTemp(nightP ? nightP.temperature : dayP.temperature   - 15))
-    dailyPrecipProbMax.push(Math.max(
-      dayP?.probabilityOfPrecipitation?.value   ?? 0,
-      nightP?.probabilityOfPrecipitation?.value ?? 0
-    ))
+
+    const dayProb   = dayP?.probabilityOfPrecipitation?.value   ?? 0
+    const nightProb = nightP?.probabilityOfPrecipitation?.value ?? 0
+    dailyPrecipProbMax.push(Math.max(dayProb, nightProb))
+    dailyPrecipProbMin.push(Math.min(dayProb, nightProb))
+
     dailyCode.push(Math.max(
       dayP   ? nwsForecastToWmo(dayP.shortForecast)   : 0,
       nightP ? nwsForecastToWmo(nightP.shortForecast) : 0
@@ -320,7 +336,6 @@ async function fetchNWS(lat, lon, units) {
     dailySunset.push(sunset)
   }
 
-  // Derive daily wind max + min (km/h -> display unit) from gridData windSpeed time series
   let dailyWindMax = dailyTime.map(() => null)
   let dailyWindMin = dailyTime.map(() => null)
   if (gridWindMap) {
@@ -330,15 +345,12 @@ async function fetchNWS(lat, lon, units) {
     dailyWindMin = rawMinKmh.map(v => v != null ? gridWindToDisplay(v) : null)
   }
 
-  // Derive daily precip probability max from gridData probabilityOfPrecipitation.
-  // We use this in preference to the 12-hr forecast period values because the grid series
-  // has full hourly resolution, giving a true daily max that matches what NWS shows on their site.
-  // precipitation_sum is left as null for NWS — charts.jsx will fall back to the probability chart.
-  let dailyPrecipProbMaxGrid = dailyPrecipProbMax // fallback: already built from forecast periods
-  if (gridPrecipProbMap) {
-    const gridMax = dailyMaxFromHourlyMap(gridPrecipProbMap, dailyTime, timeZone)
-    // Only override where grid gave a real value
-    dailyPrecipProbMaxGrid = gridMax.map((v, i) => v != null ? Math.round(v) : dailyPrecipProbMax[i])
+  let dailyPrecipSum = dailyTime.map(() => 0)
+  if (gridQPFValues) {
+    const mmToDisplay = (mm) => units === 'imperial'
+      ? Math.round(mm / 25.4 * 100) / 100
+      : Math.round(mm * 100) / 100
+    dailyPrecipSum = dailyPrecipSumFromGrid(gridQPFValues, dailyTime, timeZone, mmToDisplay)
   }
 
   return {
@@ -366,8 +378,9 @@ async function fetchNWS(lat, lon, units) {
       weather_code:                  dailyCode,
       temperature_2m_max:            dailyMax,
       temperature_2m_min:            dailyMin,
-      precipitation_sum:             dailyTime.map(() => null), // NWS QPF unreliable; use prob chart
-      precipitation_probability_max: dailyPrecipProbMaxGrid,
+      precipitation_sum:             dailyPrecipSum,
+      precipitation_probability_max: dailyPrecipProbMax,
+      precipitation_probability_min: dailyPrecipProbMin,
       wind_speed_10m_max:            dailyWindMax,
       wind_speed_10m_min:            dailyWindMin,
       sunrise:                       dailySunrise,
