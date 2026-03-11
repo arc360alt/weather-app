@@ -11,3 +11,8 @@ Its in the name, a simple weather app with a radar.
 
 # Issues we cant fix:
 - The very noticable seem in the Radar that can bee seen in the US, This is an issue upstreem with MapTiler that even shows up on their own demmo.
+
+# ToDo:
+- Improve the radar to make it look much better and be more accurate
+- Add weather warning polygons for a visual of what areas have a certan weather warning
+- Improve actual weather data
