@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MAP_STYLES, WEATHER_LAYERS, ANIMATION_SPEEDS, WEATHER_PROVIDERS } from '../config/defaults'
+import { MAP_STYLES, WEATHER_LAYERS, ANIMATION_SPEEDS, WEATHER_PROVIDERS, RADAR_PROVIDERS } from '../config/defaults'
 
 function Row({ label, children }) {
   return (
@@ -259,6 +259,32 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
               </Row>
             )}
           </section>
+
+          <section className="settings-section">
+        <h3>Radar Provider</h3>
+        <Row label="Provider">
+          <div className="btn-group">
+            {RADAR_PROVIDERS.map(p => (
+              <button key={p.value}
+                className={`btn-option ${settings.radarProvider === p.value ? 'active' : ''}`}
+                onClick={() => set('radarProvider', p.value)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Row>
+        {settings.radarProvider === 'rainviewer' && (
+          <p className="settings-hint">
+            Warning: This has no future forcast, use MapTiler for that.
+          </p>
+        )}
+        {settings.radarProvider === 'nexrad' && (
+          <p className="settings-hint">
+            Quite noisy, thats just how this radar looks. Its raw unprocesed data so its accurate but looks kinda bad.
+          </p>
+        )}
+      </section>
 
           <section className="settings-section">
             <h3>Weather Provider</h3>

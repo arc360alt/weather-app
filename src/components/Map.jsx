@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
+import RainViewerRadar from './RainViewerRadar'
+import NexradRadar from './NexradRadar'
 
-const STEP_SEC         = 10 * 60  // 10 min steps
-const RADAR_REFRESH_MS = 10 * 60 * 1000  // refresh radar every 10 minutes
+const STEP_SEC         = 10 * 60
+const RADAR_REFRESH_MS = 10 * 60 * 1000
 
 function getStyleUrl(style) {
   const key = import.meta.env.VITE_MAPTILER_KEY
@@ -14,55 +16,56 @@ function getStyleUrl(style) {
     'backdrop':   'backdrop',
     'ocean':      'ocean',
   }
-  const id = ids[style] ?? 'streets-v2'
-  return `https://api.maptiler.com/maps/${id}/style.json?key=${key}`
+  return `https://api.maptiler.com/maps/${ids[style] ?? 'streets-v2'}/style.json?key=${key}`
 }
 
 function buildFrames(startSec, endSec) {
   const nowSec = Date.now() / 1000
   const frames = []
   for (let t = startSec; t <= endSec; t += STEP_SEC) {
-    frames.push({
-      time: Math.round(t),
-      type: t <= nowSec ? 'past' : 'nowcast',
-    })
+    frames.push({ time: Math.round(t), type: t <= nowSec ? 'past' : 'nowcast' })
   }
   return frames
 }
+
+// Layers that use a particle system — setOpacity must come after onSourceReadyAsync
+const PARTICLE_LAYERS = new Set(['wind'])
 
 export default function Map({ settings, onMapClick, onFramesChange, onPlayingChange, radarControls }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
   const markerRef    = useRef(null)
   const layerRef     = useRef(null)
+  const layerTypeRef = useRef(null)  // track what type is currently loaded
 
-  const framesRef    = useRef([])
-  const indexRef     = useRef(0)
-  const pausedRef    = useRef(true)
-  const timerRef     = useRef(null)
-  const readyRef     = useRef(false)
-  const loadingRef   = useRef(false)
+  const framesRef  = useRef([])
+  const indexRef   = useRef(0)
+  const pausedRef  = useRef(true)
+  const timerRef   = useRef(null)
+  const readyRef   = useRef(false)
+  const loadingRef = useRef(false)
 
-  // Auto-refresh timer ref
-  const refreshTimerRef     = useRef(null)
-  const currentLayerTypeRef = useRef(null)
+  const refreshTimerRef = useRef(null)
+  const [mapReady, setMapReady] = useState(false)
 
   const speedRef        = useRef(settings.animationSpeed)
   const opacityRef      = useRef(settings.layerOpacity)
   const animateRadarRef = useRef(settings.animateRadar)
   const onFramesRef     = useRef(onFramesChange)
   const onPlayingRef    = useRef(onPlayingChange)
+  const settingsRef     = useRef(settings)
 
   useEffect(() => { speedRef.current        = settings.animationSpeed }, [settings.animationSpeed])
   useEffect(() => { opacityRef.current      = settings.layerOpacity   }, [settings.layerOpacity])
   useEffect(() => { animateRadarRef.current = settings.animateRadar   }, [settings.animateRadar])
   useEffect(() => { onFramesRef.current     = onFramesChange          }, [onFramesChange])
   useEffect(() => { onPlayingRef.current    = onPlayingChange         }, [onPlayingChange])
+  useEffect(() => { settingsRef.current     = settings                }, [settings])
 
-  // Wire controls once on mount
+  // Wire MapTiler controls — child providers overwrite these when they mount
   useEffect(() => {
     if (!radarControls) return
-    radarControls.seek = (idx) => { pause(); goToFrame(idx) }
+    radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
     radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
   }, []) // eslint-disable-line
 
@@ -77,7 +80,10 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       zoom:               6,
       attributionControl: true,
     })
-    mapRef.current.once('idle', () => loadLayer(settings.weatherLayer))
+    mapRef.current.once('idle', () => {
+      loadLayer(settings.weatherLayer)
+      setMapReady(true)
+    })
     mapRef.current.on('click', (e) => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
     return () => {
       stopLoop()
@@ -126,9 +132,24 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     loadLayer(settings.weatherLayer)
   }, [settings.weatherLayer]) // eslint-disable-line
 
-  // Opacity
+  // Radar provider swap — tear down MapTiler layer, child components handle the rest
   useEffect(() => {
-    layerRef.current?.setOpacity?.(settings.layerOpacity)
+    if (!mapRef.current?.isStyleLoaded()) return
+    if (settings.weatherLayer !== 'radar') return
+    loadingRef.current = false
+    stopLoop(); stopRefreshTimer(); dropLayer()
+    // Only load MapTiler radar if that's the chosen provider
+    // RainViewer/NEXRAD mount themselves via JSX below
+    if (settings.radarProvider === 'maptiler') {
+      loadLayer('radar')
+    }
+  }, [settings.radarProvider]) // eslint-disable-line
+
+  // Opacity — only applies to MapTiler layers (particle layers need special handling)
+  useEffect(() => {
+    if (!layerRef.current || !readyRef.current) return
+    if (PARTICLE_LAYERS.has(layerTypeRef.current)) return  // wind handles opacity internally
+    layerRef.current.setOpacity?.(settings.layerOpacity)
   }, [settings.layerOpacity])
 
   // Speed change
@@ -136,7 +157,7 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     if (!pausedRef.current) { stopLoop(); scheduleNext() }
   }, [settings.animationSpeed]) // eslint-disable-line
 
-  // ── Refresh timer ──────────────────────────────────────────────────────────────
+  // ── Refresh timer ────────────────────────────────────────────────────────────
 
   function stopRefreshTimer() {
     if (refreshTimerRef.current) {
@@ -145,23 +166,18 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     }
   }
 
-  function startRefreshTimer(layerType) {
+  function startRefreshTimer() {
     stopRefreshTimer()
-    if (layerType !== 'radar') return
-
     refreshTimerRef.current = setInterval(() => {
-      console.log('[Radar] Auto-refreshing radar data…')
       const wasPlaying = !pausedRef.current
       loadingRef.current = false
       stopLoop()
       dropLayer()
-      loadLayer('radar').then(() => {
-        if (wasPlaying) play()
-      })
+      loadLayer('radar').then(() => { if (wasPlaying) play() })
     }, RADAR_REFRESH_MS)
   }
 
-  // ── Animation ─────────────────────────────────────────────────────────────────
+  // ── Animation ────────────────────────────────────────────────────────────────
 
   function stopLoop() {
     clearTimeout(timerRef.current)
@@ -195,35 +211,38 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     if (!readyRef.current || !framesRef.current.length || !layerRef.current) return
     const clamped = Math.max(0, Math.min(framesRef.current.length - 1, idx))
     indexRef.current = clamped
-    try {
-      layerRef.current.setAnimationTime(framesRef.current[clamped].time)
-    } catch (e) {
-      console.warn('setAnimationTime error:', e)
-    }
+    try { layerRef.current.setAnimationTime(framesRef.current[clamped].time) }
+    catch (e) { console.warn('setAnimationTime error:', e) }
     onFramesRef.current?.(framesRef.current, clamped)
   }
 
-  // ── Layer ─────────────────────────────────────────────────────────────────────
+  // ── Layer management ─────────────────────────────────────────────────────────
 
   function dropLayer() {
-    loadingRef.current = false
     readyRef.current = false
     stopLoop()
-    if (!layerRef.current || !mapRef.current) return
-    const id = layerRef.current.id ?? layerRef.current
-    try {
-      if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id)
-    } catch (e) {
-      console.warn('removeLayer error:', e)
+    if (layerRef.current && mapRef.current) {
+      const id = layerRef.current.id ?? layerRef.current
+      try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
+      catch (e) { console.warn('removeLayer error:', e) }
     }
-    layerRef.current = null
+    layerRef.current  = null
+    layerTypeRef.current = null
+    framesRef.current = []
     onFramesRef.current?.([], 0)
   }
 
   async function loadLayer(type) {
     if (loadingRef.current) return
     loadingRef.current = true
-    currentLayerTypeRef.current = type
+    layerTypeRef.current = type
+
+    // Non-maptiler radar providers — handled by child components via JSX
+    const provider = settingsRef.current.radarProvider ?? 'maptiler'
+    if (type === 'radar' && provider !== 'maptiler') {
+      loadingRef.current = false
+      return
+    }
 
     let mw
     try { mw = await import('@maptiler/weather') }
@@ -240,55 +259,59 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     const LayerClass = ClassMap[type]
     if (!LayerClass) { loadingRef.current = false; return }
 
-    readyRef.current = false
-    stopLoop()
+    // Clean up any existing layer first
     if (layerRef.current && mapRef.current) {
-      try { mapRef.current.removeLayer(layerRef.current) } catch {
-        try { mapRef.current.removeLayer(layerRef.current.id) } catch {}
-      }
+      const id = layerRef.current.id ?? layerRef.current
+      try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
+      catch {}
       layerRef.current = null
     }
+    readyRef.current = false
+    stopLoop()
 
     try {
       const layer = new LayerClass()
       layerRef.current = layer
       mapRef.current.addLayer(layer)
+
+      // Wait for source data before doing anything else
+      await layer.onSourceReadyAsync()
+
+      // Bail if layer was swapped out while we were waiting
+      if (layerRef.current !== layer) return
+
+      // Safe to set opacity now (particle layers are ready)
       layer.setOpacity?.(opacityRef.current)
 
-      if (type === 'radar') {
-        await layer.onSourceReadyAsync()
+      const startSec = layer.getAnimationStart?.()
+      const endSec   = layer.getAnimationEnd?.()
 
-        if (layerRef.current !== layer) return
-
-        const startSec = layer.getAnimationStart()
-        const endSec   = layer.getAnimationEnd()
-        const nowSec   = Date.now() / 1000
-
-        console.log('[Radar] range:', new Date(startSec * 1000).toLocaleTimeString(), '-', new Date(endSec * 1000).toLocaleTimeString())
-
-        const frames = buildFrames(startSec, endSec)
-        framesRef.current = frames
-
-        indexRef.current = frames.reduce((best, f, i) =>
-          Math.abs(f.time - nowSec) < Math.abs(frames[best].time - nowSec) ? i : best
-        , 0)
-
-        readyRef.current = true
-
-        try { layer.pauseAnimation() } catch {}
-
-        goToFrame(indexRef.current)
-        onFramesRef.current?.(frames, indexRef.current)
-
-        // Start the 10-minute auto-refresh timer
-        startRefreshTimer('radar')
-
-        if (animateRadarRef.current) play()
-      } else {
+      if (startSec == null || endSec == null) {
+        // Layer doesn't support animation (shouldn't happen with current MapTiler layers)
         readyRef.current = false
         onFramesRef.current?.([], 0)
-        stopRefreshTimer()
+        loadingRef.current = false
+        return
       }
+
+      const frames = buildFrames(startSec, endSec)
+      framesRef.current = frames
+
+      const nowSec = Date.now() / 1000
+      indexRef.current = frames.reduce((best, f, i) =>
+        Math.abs(f.time - nowSec) < Math.abs(frames[best].time - nowSec) ? i : best
+      , 0)
+
+      readyRef.current = true
+      try { layer.pauseAnimation() } catch {}
+
+      goToFrame(indexRef.current)
+      onFramesRef.current?.(frames, indexRef.current)
+
+      if (type === 'radar') startRefreshTimer()
+
+      if (animateRadarRef.current) play()
+
     } catch (e) {
       console.warn('loadLayer error:', e)
       stopRefreshTimer()
@@ -297,7 +320,34 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     }
   }
 
+  const isExternalRadar = settings.weatherLayer === 'radar' &&
+    (settings.radarProvider === 'rainviewer' || settings.radarProvider === 'nexrad')
+
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }} />
+    <>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }} />
+      {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'rainviewer' && (
+        <RainViewerRadar
+          map={mapRef.current}
+          opacity={settings.layerOpacity}
+          animationSpeed={settings.animationSpeed}
+          animateRadar={settings.animateRadar}
+          onFramesChange={onFramesChange}
+          onPlayingChange={onPlayingChange}
+          radarControls={radarControls}
+        />
+      )}
+      {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'nexrad' && (
+        <NexradRadar
+          map={mapRef.current}
+          opacity={settings.layerOpacity}
+          animationSpeed={settings.animationSpeed}
+          animateRadar={settings.animateRadar}
+          onFramesChange={onFramesChange}
+          onPlayingChange={onPlayingChange}
+          radarControls={radarControls}
+        />
+      )}
+    </>
   )
 }

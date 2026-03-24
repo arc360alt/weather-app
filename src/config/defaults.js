@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS = {
   // Weather provider
   weatherProvider: 'openmeteo',  // 'openmeteo' | 'openweathermap'
   owmApiKey: '',
+  radarProvider: 'maptiler',
 }
 
 export const MAP_STYLES = [
@@ -87,5 +88,11 @@ export const WEATHER_CODES = {
   96: { label: 'Thunderstorm + Hail',icon: '⛈️' },
   99: { label: 'Heavy Thunderstorm',icon: '⛈️' },
 }
+
+export const RADAR_PROVIDERS = [
+  { label: 'MapTiler',   value: 'maptiler' },
+  { label: 'RainViewer', value: 'rainviewer' },
+  { label: 'NEXRAD',     value: 'nexrad' },
+]
 
 export const STORAGE_KEY = 'weather-app-settings'

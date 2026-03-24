@@ -68,7 +68,7 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
 
         <div className="radar-zone-labels">
           <span style={{ width: `${pastPct}%` }}>Past</span>
-          <span style={{ width: `${100 - pastPct}%`, textAlign: 'right' }}>Forecast</span>
+          <span style={{ width: `${90 - pastPct}%`, textAlign: 'right' }}>Forecast</span>
         </div>
 
         <div className="radar-track">

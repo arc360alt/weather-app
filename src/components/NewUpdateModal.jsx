@@ -2,15 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 
 const UPDATES = [
   {
-    id:      'v1.6-2026-03-06',
-    date:    'March 6, 2026',
-    expires: '03-22-2026',
-    version: 'v1.6',
-    title:   '7 Day Charts fixed',
+    id:      'v1.7-2026-03-24',
+    date:    'March 24, 2026',
+    expires: '04-10-2026',
+    version: 'v1.7',
+    title:   'New radar providers',
     items: [
-      { icon: '🌐', text: 'Fixed the 7 day charts to work on all precipitation and wind now.' },
-      // { icon: '💨', text: 'Hourly wind now pulls from gridpoint data, exact values instead of 5 mph steps' },
-      // { icon: '🌡️', text: 'Current conditions (wind, humidity, pressure) now come from live observation stations' },
+      { icon: '🌐', text: 'Add 2 new radar providers for those who want higher quality or raw radar data.' },
+      { icon: '💨', text: 'Fix a bunch of my math issues in the code' },
+      { icon: '🌡️', text: 'Add Future casts for all other radar layers' },
       // { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
       // { icon: '🕐', text: 'Fixed all timestamp handling' },
       { icon: '🔧', text: 'Simple bug fixes' },

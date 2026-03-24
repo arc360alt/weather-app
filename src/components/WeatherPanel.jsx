@@ -33,7 +33,7 @@ function resolvePrecipProb(max, min, mode) {
   if (mode === 'max') return max
   if (mode === 'min') return min ?? max
   const avg = min != null ? (max + min) / 2 : max
-  return Math.round(avg / 5) * 5
+  return Math.round(avg)
 }
 
 function StatTile({ icon, label, value }) {

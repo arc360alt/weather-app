@@ -115,7 +115,7 @@ export default function App() {
   const handleTogglePanel  = () => panelOpen ? setPanelOpen(false) : openPanel()
 
   const panelLeft    = settings.panelPosition !== 'right'
-  const showRadarBar = settings.weatherLayer === 'radar' && radarFrames.length > 0
+  const showRadarBar = radarFrames.length > 0
 
   return (
     <div className={`app-root${panelLeft ? '' : ' panel-on-right'}`}>

@@ -56,15 +56,17 @@ function dailyPrecipSumFromGrid(values, localDateKeys, timeZone, toDisplayUnit) 
   const sumByDate = new Map()
   for (const { validTime, value } of values) {
     if (value == null || value === 0) continue
-    const isoStart = validTime.split('/')[0]
+    const [isoStart, duration] = validTime.split('/')
     const utcDate = new Date(isoStart)
+    const hours = parseInt(duration.match(/PT?(\d+)H/)?.[1] ?? '1')
+    const totalMm = value * hours
     let localDate
     try {
       localDate = utcDate.toLocaleDateString('en-CA', { timeZone })
     } catch {
       localDate = utcDate.toISOString().slice(0, 10)
     }
-    sumByDate.set(localDate, (sumByDate.get(localDate) ?? 0) + value)
+    sumByDate.set(localDate, (sumByDate.get(localDate) ?? 0) + totalMm)
   }
   return localDateKeys.map(d => {
     const raw = sumByDate.get(d)
@@ -108,7 +110,8 @@ function dailyMinFromHourlyMap(hourlyMap, localDateKeys, timeZone) {
 
 function approxSunriseSunset(dateStr, lat, lon, timeZone) {
   const [year, month, day] = dateStr.split('-').map(Number)
-  const leap = year % 4 === 0 ? 1 : 0
+  // Correct Gregorian leap year rule
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 1 : 0
   const N = Math.floor(275 * month / 9) - Math.floor((month + 9) / 12) * (2 - leap) + day - 30
   const latRad = (lat * Math.PI) / 180
   const D = 23.45 * Math.sin(((360 / 365) * (N - 81) * Math.PI) / 180)
@@ -120,7 +123,9 @@ function approxSunriseSunset(dateStr, lat, lon, timeZone) {
   let utcOffsetHours = 0
   try {
     const midnight = new Date(`${dateStr}T12:00:00Z`)
-    const localHour = parseInt(new Date(midnight).toLocaleString('en-US', { timeZone, hour: 'numeric', hour12: false }))
+    const localHour = parseInt(
+      new Date(midnight).toLocaleString('en-US', { timeZone, hour: '2-digit', hour12: false })
+    )
     utcOffsetHours = ((localHour - 12 + 36) % 24) - 12
   } catch { utcOffsetHours = Math.round(lon / 15) }
   const toIso = (utcH) => {
