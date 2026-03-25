@@ -28,7 +28,6 @@ function buildFrames(startSec, endSec) {
   return frames
 }
 
-// Layers that use a particle system — setOpacity must come after onSourceReadyAsync
 const PARTICLE_LAYERS = new Set(['wind'])
 
 export default function Map({ settings, onMapClick, onFramesChange, onPlayingChange, radarControls }) {
@@ -36,7 +35,7 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
   const mapRef       = useRef(null)
   const markerRef    = useRef(null)
   const layerRef     = useRef(null)
-  const layerTypeRef = useRef(null)  // track what type is currently loaded
+  const layerTypeRef = useRef(null)
 
   const framesRef  = useRef([])
   const indexRef   = useRef(0)
@@ -47,6 +46,7 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
 
   const refreshTimerRef = useRef(null)
   const [mapReady, setMapReady] = useState(false)
+  const [radarKey, setRadarKey] = useState(0)
 
   const speedRef        = useRef(settings.animationSpeed)
   const opacityRef      = useRef(settings.layerOpacity)
@@ -62,12 +62,15 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
   useEffect(() => { onPlayingRef.current    = onPlayingChange         }, [onPlayingChange])
   useEffect(() => { settingsRef.current     = settings                }, [settings])
 
-  // Wire MapTiler controls — child providers overwrite these when they mount
-  useEffect(() => {
+  const goToFrameRef = useRef(null)
+  const playRef      = useRef(null)
+  const pauseRef     = useRef(null)
+
+  function rewireToMapTiler() {
     if (!radarControls) return
-    radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
-    radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
-  }, []) // eslint-disable-line
+    radarControls.seek       = (idx) => { pauseRef.current?.(); goToFrameRef.current?.(idx) }
+    radarControls.togglePlay = () => { if (pausedRef.current) playRef.current?.(); else pauseRef.current?.() }
+  }
 
   // Init map once
   useEffect(() => {
@@ -81,6 +84,7 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       attributionControl: true,
     })
     mapRef.current.once('idle', () => {
+      rewireToMapTiler()
       loadLayer(settings.weatherLayer)
       setMapReady(true)
     })
@@ -121,7 +125,11 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     loadingRef.current = false
     stopLoop(); stopRefreshTimer(); dropLayer()
     mapRef.current.setStyle(getStyleUrl(settings.mapStyle))
-    mapRef.current.once('idle', () => loadLayer(settings.weatherLayer))
+    mapRef.current.once('idle', () => {
+      rewireToMapTiler()
+      loadLayer(settings.weatherLayer)
+      setRadarKey(k => k + 1)
+    })
   }, [settings.mapStyle]) // eslint-disable-line
 
   // Weather layer swap
@@ -129,26 +137,42 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     if (!mapRef.current?.isStyleLoaded()) return
     loadingRef.current = false
     stopLoop(); stopRefreshTimer(); dropLayer()
+    rewireToMapTiler()
     loadLayer(settings.weatherLayer)
   }, [settings.weatherLayer]) // eslint-disable-line
 
-  // Radar provider swap — tear down MapTiler layer, child components handle the rest
+  // Radar provider swap.
+  // Key insight: always drop the MapTiler layer first (synchronously), THEN
+  // bump radarKey so the incoming child mounts onto a clean map.
+  // If switching TO maptiler, rewire controls and load the layer directly.
   useEffect(() => {
     if (!mapRef.current?.isStyleLoaded()) return
-    if (settings.weatherLayer !== 'radar') return
-    loadingRef.current = false
-    stopLoop(); stopRefreshTimer(); dropLayer()
-    // Only load MapTiler radar if that's the chosen provider
-    // RainViewer/NEXRAD mount themselves via JSX below
-    if (settings.radarProvider === 'maptiler') {
-      loadLayer('radar')
+
+    if (settingsRef.current.weatherLayer === 'radar') {
+      // Always tear down whatever is currently on the map first
+      loadingRef.current = false
+      stopLoop(); stopRefreshTimer(); dropLayer()
+
+      if (settings.radarProvider === 'maptiler') {
+        // MapTiler handles itself — rewire controls and load
+        rewireToMapTiler()
+        loadLayer('radar')
+      } else {
+        // External provider — bump key AFTER dropLayer so the child
+        // mounts onto a map with no leftover MapTiler layer
+        setRadarKey(k => k + 1)
+      }
+    } else {
+      // Not on radar right now — just pre-bump the key so when the user
+      // switches to radar later the child starts fresh
+      setRadarKey(k => k + 1)
     }
   }, [settings.radarProvider]) // eslint-disable-line
 
-  // Opacity — only applies to MapTiler layers (particle layers need special handling)
+  // Opacity
   useEffect(() => {
     if (!layerRef.current || !readyRef.current) return
-    if (PARTICLE_LAYERS.has(layerTypeRef.current)) return  // wind handles opacity internally
+    if (PARTICLE_LAYERS.has(layerTypeRef.current)) return
     layerRef.current.setOpacity?.(settings.layerOpacity)
   }, [settings.layerOpacity])
 
@@ -216,6 +240,10 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     onFramesRef.current?.(framesRef.current, clamped)
   }
 
+  goToFrameRef.current = goToFrame
+  playRef.current      = play
+  pauseRef.current     = pause
+
   // ── Layer management ─────────────────────────────────────────────────────────
 
   function dropLayer() {
@@ -226,9 +254,9 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
       catch (e) { console.warn('removeLayer error:', e) }
     }
-    layerRef.current  = null
+    layerRef.current     = null
     layerTypeRef.current = null
-    framesRef.current = []
+    framesRef.current    = []
     onFramesRef.current?.([], 0)
   }
 
@@ -237,7 +265,6 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     loadingRef.current = true
     layerTypeRef.current = type
 
-    // Non-maptiler radar providers — handled by child components via JSX
     const provider = settingsRef.current.radarProvider ?? 'maptiler'
     if (type === 'radar' && provider !== 'maptiler') {
       loadingRef.current = false
@@ -259,7 +286,6 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     const LayerClass = ClassMap[type]
     if (!LayerClass) { loadingRef.current = false; return }
 
-    // Clean up any existing layer first
     if (layerRef.current && mapRef.current) {
       const id = layerRef.current.id ?? layerRef.current
       try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
@@ -274,20 +300,19 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       layerRef.current = layer
       mapRef.current.addLayer(layer)
 
-      // Wait for source data before doing anything else
       await layer.onSourceReadyAsync()
 
-      // Bail if layer was swapped out while we were waiting
-      if (layerRef.current !== layer) return
+      if (layerRef.current !== layer) {
+        loadingRef.current = false
+        return
+      }
 
-      // Safe to set opacity now (particle layers are ready)
       layer.setOpacity?.(opacityRef.current)
 
       const startSec = layer.getAnimationStart?.()
       const endSec   = layer.getAnimationEnd?.()
 
       if (startSec == null || endSec == null) {
-        // Layer doesn't support animation (shouldn't happen with current MapTiler layers)
         readyRef.current = false
         onFramesRef.current?.([], 0)
         loadingRef.current = false
@@ -309,7 +334,6 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       onFramesRef.current?.(frames, indexRef.current)
 
       if (type === 'radar') startRefreshTimer()
-
       if (animateRadarRef.current) play()
 
     } catch (e) {
@@ -320,14 +344,12 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     }
   }
 
-  const isExternalRadar = settings.weatherLayer === 'radar' &&
-    (settings.radarProvider === 'rainviewer' || settings.radarProvider === 'nexrad')
-
   return (
     <>
       <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }} />
       {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'rainviewer' && (
         <RainViewerRadar
+          key={radarKey}
           map={mapRef.current}
           opacity={settings.layerOpacity}
           animationSpeed={settings.animationSpeed}
@@ -335,10 +357,12 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
           onFramesChange={onFramesChange}
           onPlayingChange={onPlayingChange}
           radarControls={radarControls}
+          onUnmount={rewireToMapTiler}
         />
       )}
       {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'nexrad' && (
         <NexradRadar
+          key={radarKey}
           map={mapRef.current}
           opacity={settings.layerOpacity}
           animationSpeed={settings.animationSpeed}
@@ -346,6 +370,7 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
           onFramesChange={onFramesChange}
           onPlayingChange={onPlayingChange}
           radarControls={radarControls}
+          onUnmount={rewireToMapTiler}
         />
       )}
     </>

@@ -10,6 +10,7 @@ export default function RainViewerRadar({
   onFramesChange,
   onPlayingChange,
   radarControls,
+  onUnmount,
 }) {
   const framesRef    = useRef([])
   const indexRef     = useRef(0)
@@ -17,32 +18,34 @@ export default function RainViewerRadar({
   const timerRef     = useRef(null)
   const mountedRef   = useRef(true)
   const hostRef      = useRef('')
-  const activeIdRef  = useRef(null)  // currently visible layer id
+  const activeIdRef  = useRef(null)
 
   const speedRef      = useRef(animationSpeed)
   const opacityRef    = useRef(opacity)
   const onFramesRef   = useRef(onFramesChange)
   const onPlayingRef  = useRef(onPlayingChange)
 
-  useEffect(() => { speedRef.current    = animationSpeed }, [animationSpeed])
-  useEffect(() => { opacityRef.current  = opacity },        [opacity])
-  useEffect(() => { onFramesRef.current = onFramesChange }, [onFramesChange])
-  useEffect(() => { onPlayingRef.current = onPlayingChange },[onPlayingChange])
+  useEffect(() => { speedRef.current     = animationSpeed  }, [animationSpeed])
+  useEffect(() => { opacityRef.current   = opacity         }, [opacity])
+  useEffect(() => { onFramesRef.current  = onFramesChange  }, [onFramesChange])
+  useEffect(() => { onPlayingRef.current = onPlayingChange }, [onPlayingChange])
 
+  // Wire controls once on mount. onUnmount (passed from Map.jsx) restores
+  // them back to the MapTiler functions when this component is destroyed.
   useEffect(() => {
-    if (!radarControls) return
-    radarControls.seek = (idx) => { pause(); goToFrame(idx) }
-    radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
+    if (radarControls) {
+      radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
+      radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
+    }
+    return () => {
+      // Restore MapTiler controls so other layers work after we unmount
+      onUnmount?.()
+    }
   }, []) // eslint-disable-line
 
   useEffect(() => {
     mountedRef.current = true
     if (!map) return
-
-    if (radarControls) {
-      radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
-      radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
-    }
 
     async function init() {
       let json
@@ -66,15 +69,12 @@ export default function RainViewerRadar({
       framesRef.current = allFrames
       if (!allFrames.length) return
 
-      // Start at most recent past frame
       const nowSec = Date.now() / 1000
       const startIdx = allFrames.reduce((best, f, i) =>
         f.type === 'past' && f.time <= nowSec ? i : best
       , 0)
       indexRef.current = startIdx
 
-      // Pre-add the source and layer so tile fetching starts immediately,
-      // then wait for it to load before calling goToFrame so it shows instantly.
       const frame = allFrames[startIdx]
       const id    = `rv-${frame.time}`
 
@@ -94,11 +94,13 @@ export default function RainViewerRadar({
         })
       }
 
-      // Wait for the initial frame to be tile-ready before revealing it
       await waitForSource(id)
       if (!mountedRef.current) return
 
-      await goToFrame(startIdx)
+      if (map.getLayer(id)) {
+        map.setPaintProperty(id, 'raster-opacity', opacityRef.current)
+      }
+      activeIdRef.current = id
       onFramesRef.current?.(allFrames, startIdx)
       if (animateRadar) play()
     }
@@ -138,15 +140,10 @@ export default function RainViewerRadar({
     activeIdRef.current = null
   }
 
-  // Waits for a source's tiles to be loaded, using both sourcedata and idle
-  // events so we don't miss the case where the source loads before listeners attach.
   async function waitForSource(id) {
     if (map.isSourceLoaded(id)) return
-
     await new Promise(resolve => {
-      // Double-check synchronously — race between the check above and listener setup
       if (map.isSourceLoaded(id)) { resolve(); return }
-
       let resolved = false
       const finish = () => {
         if (resolved) return
@@ -156,18 +153,10 @@ export default function RainViewerRadar({
         clearTimeout(fallback)
         resolve()
       }
-
-      const onData = (e) => {
-        if (e.sourceId === id && map.isSourceLoaded(id)) finish()
-      }
-      // 'idle' fires after all pending tiles finish — reliable catch-all
-      const onIdle = () => {
-        if (map.isSourceLoaded(id)) finish()
-      }
-
+      const onData = (e) => { if (e.sourceId === id && map.isSourceLoaded(id)) finish() }
+      const onIdle = () => { if (map.isSourceLoaded(id)) finish() }
       map.on('sourcedata', onData)
       map.on('idle', onIdle)
-      // Hard timeout so animation never gets permanently stuck
       const fallback = setTimeout(finish, 2000)
     })
   }
@@ -179,14 +168,12 @@ export default function RainViewerRadar({
     const frame   = frames[clamped]
     const id      = `rv-${frame.time}`
 
-    // Already showing this frame
     if (activeIdRef.current === id) {
       indexRef.current = clamped
       onFramesRef.current?.(frames, clamped)
       return
     }
 
-    // Add source + layer if not already present (init() pre-adds the first frame)
     if (!map.getSource(id)) {
       map.addSource(id, {
         type:     'raster',
@@ -203,12 +190,9 @@ export default function RainViewerRadar({
       })
     }
 
-    // Wait for tiles to be ready before swapping so there's no blank flash
     await waitForSource(id)
-
     if (!mountedRef.current) return
 
-    // Swap: show new, remove old
     if (map.getLayer(id)) {
       map.setPaintProperty(id, 'raster-opacity', opacityRef.current)
     }

@@ -17,7 +17,10 @@ function formatDate(unixSec) {
 
 export default function RadarControls({ frames, currentIndex, playing, onSeek, onTogglePlay }) {
   const [localIndex, setLocalIndex] = useState(0)
-  const isDragging = useRef(false)
+  const isDragging    = useRef(false)
+  // Track the committed drag value in a ref so onPointerUp always has the
+  // latest value without depending on e.target.value (which is unreliable).
+  const pendingIndex  = useRef(0)
 
   // Sync animation ticks into local state — but never while dragging
   useEffect(() => {
@@ -78,19 +81,26 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
             <div className="radar-now-marker" style={{ left: `${pastPct}%` }} />
           </div>
           <div className="radar-progress" style={{ width: `${fillPct}%` }} />
+
           <input
             type="range"
             className="radar-slider"
             min={0}
             max={frames.length - 1}
             value={safeIdx}
-            onChange={e => setLocalIndex(parseInt(e.target.value))}
-            onPointerDown={() => { isDragging.current = true }}
-            onPointerUp={e => {
-              isDragging.current = false
+            onChange={e => {
               const idx = parseInt(e.target.value)
+              pendingIndex.current = idx   // always keep ref in sync
               setLocalIndex(idx)
-              onSeek(idx)
+            }}
+            onPointerDown={() => {
+              isDragging.current  = true
+              pendingIndex.current = safeIdx
+            }}
+            onPointerUp={() => {
+              isDragging.current = false
+              // Use the ref — never re-read e.target.value here, it's unreliable
+              onSeek(pendingIndex.current)
             }}
           />
         </div>

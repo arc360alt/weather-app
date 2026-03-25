@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react'
 
-// NOAA Ridge II composite reflectivity tiles — free, no key, stable
-// These are updated every ~2 minutes by NOAA directly
-// Format: https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?...
-// Simpler alternative: Iowa Mesonet single-layer WMS served as XYZ
-
 const FRAMES = [
   { minutesAgo: 60, label: '-60min' },
   { minutesAgo: 50, label: '-50min' },
@@ -21,19 +16,16 @@ function snapToInterval(ms, intervalMs) {
 
 function buildFrames() {
   const nowMs      = Date.now()
-  const intervalMs = 10 * 60 * 1000  // snap to 10-min boundaries
+  const intervalMs = 10 * 60 * 1000
 
   return FRAMES.map(f => {
     const t   = snapToInterval(nowMs - f.minutesAgo * 60 * 1000, intervalMs)
     const d   = new Date(t)
     const pad = (n) => String(n).padStart(2, '0')
-    // Mesonet ridge tile timestamp format: YYYYMMDDHHII
     const key = `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`
     return {
       time: Math.floor(t / 1000),
-      type: f.minutesAgo === 0 ? 'past' : 'past',
-      // Use NOAA's WMS endpoint — no timestamp needed, always current
-      // For animation we use Mesonet's ridge2 which accepts time in URL
+      type: 'past',
       tileUrl: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${key}/{z}/{x}/{y}.png`,
     }
   })
@@ -47,6 +39,7 @@ export default function NexradRadar({
   onFramesChange,
   onPlayingChange,
   radarControls,
+  onUnmount,
 }) {
   const framesRef    = useRef([])
   const indexRef     = useRef(0)
@@ -60,15 +53,20 @@ export default function NexradRadar({
   const onFramesRef  = useRef(onFramesChange)
   const onPlayingRef = useRef(onPlayingChange)
 
-  useEffect(() => { speedRef.current     = animationSpeed }, [animationSpeed])
-  useEffect(() => { opacityRef.current   = opacity },        [opacity])
-  useEffect(() => { onFramesRef.current  = onFramesChange }, [onFramesChange])
-  useEffect(() => { onPlayingRef.current = onPlayingChange },[onPlayingChange])
+  useEffect(() => { speedRef.current     = animationSpeed  }, [animationSpeed])
+  useEffect(() => { opacityRef.current   = opacity         }, [opacity])
+  useEffect(() => { onFramesRef.current  = onFramesChange  }, [onFramesChange])
+  useEffect(() => { onPlayingRef.current = onPlayingChange }, [onPlayingChange])
 
+  // Wire controls once on mount. onUnmount restores them to MapTiler when destroyed.
   useEffect(() => {
-    if (!radarControls) return
-    radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
-    radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
+    if (radarControls) {
+      radarControls.seek       = (idx) => { pause(); goToFrame(idx) }
+      radarControls.togglePlay = () => { if (pausedRef.current) play(); else pause() }
+    }
+    return () => {
+      onUnmount?.()
+    }
   }, []) // eslint-disable-line
 
   useEffect(() => {
