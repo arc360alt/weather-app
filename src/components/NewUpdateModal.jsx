@@ -2,15 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 
 const UPDATES = [
   {
-    id:      'v1.7-2026-03-24',
-    date:    'March 24, 2026',
+    id:      'v1.8-2026-03-26',
+    date:    'March 26, 2026',
     expires: '04-10-2026',
-    version: 'v1.7',
-    title:   'New radar providers',
+    version: 'v1.8',
+    title:   'Complete rewrite of the radar system',
     items: [
-      { icon: '🌐', text: 'Add 2 new radar providers for those who want higher quality or raw radar data.' },
-      { icon: '💨', text: 'Fix a bunch of my math issues in the code' },
-      { icon: '🌡️', text: 'Add Future casts for all other radar layers' },
+      { icon: '🌐', text: 'Rewrite the radar system to just work better and be much faster.' },
+      { icon: '💨', text: 'Fix some issues with the NWS weather provider randomly not giving some data' },
+      // { icon: '🌡️', text: 'Add Future casts for all other radar layers' },
       // { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
       // { icon: '🕐', text: 'Fixed all timestamp handling' },
       { icon: '🔧', text: 'Simple bug fixes' },

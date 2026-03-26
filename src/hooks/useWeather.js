@@ -186,7 +186,10 @@ async function fetchBestObservation(stationsUrl, headers) {
         const r = await fetch(`https://api.weather.gov/stations/${id}/observations/latest`, { headers })
         if (!r.ok) continue
         const p = (await r.json()).properties
-        if (p?.windSpeed?.value != null) return p
+        if (
+          p?.barometricPressure?.value != null ||
+          p?.windSpeed?.value != null
+        ) return p
       } catch { /* try next */ }
     }
   } catch { /* fall through */ }
@@ -298,9 +301,11 @@ async function fetchNWS(lat, lon, units) {
   if (obsProps?.relativeHumidity?.value != null)
     currentHumidity = Math.round(obsProps.relativeHumidity.value)
 
-  const currentPressure = obsProps?.barometricPressure?.value != null
-    ? Math.round(obsProps.barometricPressure.value / 100)
-    : null
+  let currentPressure = null
+
+  if (obsProps?.barometricPressure?.value != null) {
+    currentPressure = Math.round(obsProps.barometricPressure.value / 100)
+  }
 
   const currentWmo = obsProps?.textDescription
     ? nwsForecastToWmo(obsProps.textDescription)

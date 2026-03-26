@@ -1,109 +1,166 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
-import RainViewerRadar from './RainViewerRadar'
-import NexradRadar from './NexradRadar'
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEP_SEC         = 10 * 60
 const RADAR_REFRESH_MS = 10 * 60 * 1000
+const RAINVIEWER_API   = 'https://api.rainviewer.com/public/weather-maps.json'
+const NEXRAD_OFFSETS   = [60, 50, 40, 30, 20, 10, 0] // minutes ago
+const SPEED_MS         = { 1: 900, 3: 500, 6: 200 }
+
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
 
 function getStyleUrl(style) {
   const key = import.meta.env.VITE_MAPTILER_KEY
-  const ids = {
-    'streets-v2': 'streets-v2',
-    'satellite':  'satellite',
-    'topo-v2':    'topo-v2',
-    'backdrop':   'backdrop',
-    'ocean':      'ocean',
-  }
+  const ids  = { 'streets-v2': 'streets-v2', satellite: 'satellite', 'topo-v2': 'topo-v2', backdrop: 'backdrop', ocean: 'ocean' }
   return `https://api.maptiler.com/maps/${ids[style] ?? 'streets-v2'}/style.json?key=${key}`
 }
 
-function buildFrames(startSec, endSec) {
+function buildMaptilerFrames(startSec, endSec) {
   const nowSec = Date.now() / 1000
   const frames = []
-  for (let t = startSec; t <= endSec; t += STEP_SEC) {
+  for (let t = startSec; t <= endSec; t += STEP_SEC)
     frames.push({ time: Math.round(t), type: t <= nowSec ? 'past' : 'nowcast' })
-  }
   return frames
 }
 
-const PARTICLE_LAYERS = new Set(['wind'])
+function buildNexradFrames() {
+  const nowMs      = Date.now()
+  const intervalMs = 10 * 60 * 1000
+  return NEXRAD_OFFSETS.map(minsAgo => {
+    const t   = Math.floor((nowMs - minsAgo * 60_000) / intervalMs) * intervalMs
+    const d   = new Date(t)
+    const pad = n => String(n).padStart(2, '0')
+    const key = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`
+    const id  = `nexrad-${Math.floor(t / 1000)}`
+    return {
+      time:    Math.floor(t / 1000),
+      type:    'past',
+      layerId: id,
+      tileUrl: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${key}/{z}/{x}/{y}.png`,
+    }
+  })
+}
+
+async function fetchRainviewerFrames() {
+  const res  = await fetch(RAINVIEWER_API)
+  const json = await res.json()
+  const host = json.host
+  const past    = json.radar?.past    ?? []
+  const nowcast = json.radar?.nowcast ?? []
+  const frames  = [
+    ...past.map(f    => ({ time: f.time, path: f.path, type: 'past',    layerId: `rv-${f.time}` })),
+    ...nowcast.map(f => ({ time: f.time, path: f.path, type: 'nowcast', layerId: `rv-${f.time}` })),
+  ]
+  return { host, frames }
+}
+
+function rvTileUrl(host, path) {
+  return `${host}${path}/512/{z}/{x}/{y}/6/1_1.png`
+}
+
+// Waits for a map source to finish loading, with a fallback timeout.
+function waitForSource(map, id, ms = 2500) {
+  return new Promise(resolve => {
+    if (map.isSourceLoaded(id)) { resolve(); return }
+    let done = false
+    const finish = () => {
+      if (done) return; done = true
+      map.off('sourcedata', onData); map.off('idle', onIdle)
+      clearTimeout(timer); resolve()
+    }
+    const onData = e => { if (e.sourceId === id && map.isSourceLoaded(id)) finish() }
+    const onIdle = ()  => { if (map.isSourceLoaded(id)) finish() }
+    const timer  = setTimeout(finish, ms)
+    map.on('sourcedata', onData)
+    map.on('idle', onIdle)
+  })
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Map({ settings, onMapClick, onFramesChange, onPlayingChange, radarControls }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
   const markerRef    = useRef(null)
-  const layerRef     = useRef(null)
-  const layerTypeRef = useRef(null)
 
+  const [mapReady, setMapReady] = useState(false)
+
+  // ── Layer state (all in refs — never drives re-renders) ───────────────────
+  const maptilerLayerRef = useRef(null)      // active @maptiler/weather layer object
+  const rasterIdsRef     = useRef(new Set()) // every nexrad-*/rv-* id added to the map
+  const activeIdRef      = useRef(null)      // the raster layer currently at full opacity
+
+  // ── Animation state ───────────────────────────────────────────────────────
   const framesRef  = useRef([])
   const indexRef   = useRef(0)
   const pausedRef  = useRef(true)
-  const timerRef   = useRef(null)
   const readyRef   = useRef(false)
-  const loadingRef = useRef(false)
+  const timerRef   = useRef(null)
 
+  // Incremented by dropAllLayers() — any async loadLayer that finds its own
+  // session value stale knows it must abort and not touch the map.
+  const sessionRef = useRef(0)
+
+  // Refresh timer for auto-reloading radar data
   const refreshTimerRef = useRef(null)
-  const [mapReady, setMapReady] = useState(false)
-  const [radarKey, setRadarKey] = useState(0)
 
+  // ── Settings refs (avoid stale closures in async code) ───────────────────
   const speedRef        = useRef(settings.animationSpeed)
   const opacityRef      = useRef(settings.layerOpacity)
   const animateRadarRef = useRef(settings.animateRadar)
+  const settingsRef     = useRef(settings)
   const onFramesRef     = useRef(onFramesChange)
   const onPlayingRef    = useRef(onPlayingChange)
-  const settingsRef     = useRef(settings)
 
   useEffect(() => { speedRef.current        = settings.animationSpeed }, [settings.animationSpeed])
   useEffect(() => { opacityRef.current      = settings.layerOpacity   }, [settings.layerOpacity])
   useEffect(() => { animateRadarRef.current = settings.animateRadar   }, [settings.animateRadar])
+  useEffect(() => { settingsRef.current     = settings                }, [settings])
   useEffect(() => { onFramesRef.current     = onFramesChange          }, [onFramesChange])
   useEffect(() => { onPlayingRef.current    = onPlayingChange         }, [onPlayingChange])
-  useEffect(() => { settingsRef.current     = settings                }, [settings])
 
-  const goToFrameRef = useRef(null)
-  const playRef      = useRef(null)
-  const pauseRef     = useRef(null)
+  // ── Imperative refs exposed to RadarControls via radarControls prop ───────
+  const playFnRef  = useRef(null)
+  const pauseFnRef = useRef(null)
+  const seekFnRef  = useRef(null)
 
-  function rewireToMapTiler() {
-    if (!radarControls) return
-    radarControls.seek       = (idx) => { pauseRef.current?.(); goToFrameRef.current?.(idx) }
-    radarControls.togglePlay = () => { if (pausedRef.current) playRef.current?.(); else pauseRef.current?.() }
-  }
+  // ── Map init ──────────────────────────────────────────────────────────────
 
-  // Init map once
   useEffect(() => {
     if (!containerRef.current) return
     maptilersdk.config.apiKey = import.meta.env.VITE_MAPTILER_KEY
-    mapRef.current = new maptilersdk.Map({
+    const map = new maptilersdk.Map({
       container:          containerRef.current,
       style:              getStyleUrl(settings.mapStyle),
       center:             [settings.lon, settings.lat],
       zoom:               6,
       attributionControl: true,
     })
-    mapRef.current.once('idle', () => {
-      rewireToMapTiler()
-      loadLayer(settings.weatherLayer)
-      setMapReady(true)
-    })
-    mapRef.current.on('click', (e) => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
+    mapRef.current = map
+    map.once('idle', () => { wireControls(); setMapReady(true) })
+    map.on('click', e => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
     return () => {
       stopLoop()
       stopRefreshTimer()
-      mapRef.current?.remove()
+      map.remove()
+      mapRef.current = null
     }
   }, []) // eslint-disable-line
 
-  // Fly to location
+  // ── Fly to location ───────────────────────────────────────────────────────
+
   useEffect(() => {
     mapRef.current?.flyTo({ center: [settings.lon, settings.lat], speed: 1.5 })
   }, [settings.lat, settings.lon])
 
-  // Location pin
+  // ── Location pin ──────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!mapRef.current) return
+    const map = mapRef.current
+    if (!map) return
     markerRef.current?.remove()
     const el = document.createElement('div')
     el.style.cssText = 'width:28px;height:28px;background:#3b82f6;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 12px rgba(59,130,246,0.6),0 0 0 4px rgba(59,130,246,0.2);cursor:pointer;'
@@ -116,92 +173,76 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
       document.head.appendChild(s)
     }
     markerRef.current = new maptilersdk.Marker({ element: el, anchor: 'bottom' })
-      .setLngLat([settings.lon, settings.lat]).addTo(mapRef.current)
+      .setLngLat([settings.lon, settings.lat])
+      .addTo(map)
   }, [settings.lat, settings.lon])
 
-  // Map style swap
+  // ── Map style swap ────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!mapRef.current) return
-    loadingRef.current = false
-    stopLoop(); stopRefreshTimer(); dropLayer()
-    mapRef.current.setStyle(getStyleUrl(settings.mapStyle))
-    mapRef.current.once('idle', () => {
-      rewireToMapTiler()
-      loadLayer(settings.weatherLayer)
-      setRadarKey(k => k + 1)
+    const map = mapRef.current
+    if (!map) return
+    // dropAllLayers first (removes our layers before style wipes everything)
+    dropAllLayers()
+    map.setStyle(getStyleUrl(settings.mapStyle))
+    // After setStyle, MapTiler destroys all sources/layers itself.
+    // Our refs are already clear from dropAllLayers, so just wait for idle.
+    map.once('idle', () => {
+      wireControls()
+      loadLayer(settings.weatherLayer, settings.radarProvider)
     })
   }, [settings.mapStyle]) // eslint-disable-line
 
-  // Weather layer swap
+  // ── Weather layer swap ────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!mapRef.current?.isStyleLoaded()) return
-    loadingRef.current = false
-    stopLoop(); stopRefreshTimer(); dropLayer()
-    rewireToMapTiler()
-    loadLayer(settings.weatherLayer)
+    if (!mapReady) return
+    dropAllLayers()
+    wireControls()
+    loadLayer(settings.weatherLayer, settings.radarProvider)
   }, [settings.weatherLayer]) // eslint-disable-line
 
-  // Radar provider swap.
-  // Key insight: always drop the MapTiler layer first (synchronously), THEN
-  // bump radarKey so the incoming child mounts onto a clean map.
-  // If switching TO maptiler, rewire controls and load the layer directly.
+  // ── Radar provider swap ───────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!mapRef.current?.isStyleLoaded()) return
-
-    if (settingsRef.current.weatherLayer === 'radar') {
-      // Always tear down whatever is currently on the map first
-      loadingRef.current = false
-      stopLoop(); stopRefreshTimer(); dropLayer()
-
-      if (settings.radarProvider === 'maptiler') {
-        // MapTiler handles itself — rewire controls and load
-        rewireToMapTiler()
-        loadLayer('radar')
-      } else {
-        // External provider — bump key AFTER dropLayer so the child
-        // mounts onto a map with no leftover MapTiler layer
-        setRadarKey(k => k + 1)
-      }
-    } else {
-      // Not on radar right now — just pre-bump the key so when the user
-      // switches to radar later the child starts fresh
-      setRadarKey(k => k + 1)
-    }
+    if (!mapReady) return
+    if (settingsRef.current.weatherLayer !== 'radar') return
+    dropAllLayers()
+    wireControls()
+    loadLayer('radar', settings.radarProvider)
   }, [settings.radarProvider]) // eslint-disable-line
 
-  // Opacity
+  // ── Opacity live update ───────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!layerRef.current || !readyRef.current) return
-    if (PARTICLE_LAYERS.has(layerTypeRef.current)) return
-    layerRef.current.setOpacity?.(settings.layerOpacity)
+    const map = mapRef.current
+    if (!map) return
+    // MapTiler layer opacity
+    if (maptilerLayerRef.current && settingsRef.current.weatherLayer !== 'wind') {
+      maptilerLayerRef.current.setOpacity?.(settings.layerOpacity)
+    }
+    // Active raster layer opacity
+    if (activeIdRef.current && map.getLayer(activeIdRef.current)) {
+      map.setPaintProperty(activeIdRef.current, 'raster-opacity', settings.layerOpacity)
+    }
   }, [settings.layerOpacity])
 
-  // Speed change
+  // ── Speed change ──────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!pausedRef.current) { stopLoop(); scheduleNext() }
   }, [settings.animationSpeed]) // eslint-disable-line
 
-  // ── Refresh timer ────────────────────────────────────────────────────────────
+  // ── Initial load once map is ready ───────────────────────────────────────
 
-  function stopRefreshTimer() {
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current)
-      refreshTimerRef.current = null
-    }
-  }
+  useEffect(() => {
+    if (!mapReady) return
+    loadLayer(settings.weatherLayer, settings.radarProvider)
+  }, [mapReady]) // eslint-disable-line
 
-  function startRefreshTimer() {
-    stopRefreshTimer()
-    refreshTimerRef.current = setInterval(() => {
-      const wasPlaying = !pausedRef.current
-      loadingRef.current = false
-      stopLoop()
-      dropLayer()
-      loadLayer('radar').then(() => { if (wasPlaying) play() })
-    }, RADAR_REFRESH_MS)
-  }
-
-  // ── Animation ────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Animation
+  // ─────────────────────────────────────────────────────────────────────────
 
   function stopLoop() {
     clearTimeout(timerRef.current)
@@ -209,13 +250,12 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
   }
 
   function scheduleNext() {
-    const ms = ({ 1: 900, 3: 500, 6: 200 })[speedRef.current] ?? 500
     timerRef.current = setTimeout(() => {
       if (pausedRef.current) return
       const next = (indexRef.current + 1) % framesRef.current.length
       goToFrame(next)
       scheduleNext()
-    }, ms)
+    }, SPEED_MS[speedRef.current] ?? 500)
   }
 
   function play() {
@@ -231,95 +271,146 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
     onPlayingRef.current?.(false)
   }
 
+  // Single goToFrame that handles both MapTiler and raster providers.
+  // For raster layers we swap opacity synchronously — the tile is already
+  // in the map (added at load time), so there's no async wait needed here.
   function goToFrame(idx) {
-    if (!readyRef.current || !framesRef.current.length || !layerRef.current) return
+    if (!readyRef.current || !framesRef.current.length) return
     const clamped = Math.max(0, Math.min(framesRef.current.length - 1, idx))
     indexRef.current = clamped
-    try { layerRef.current.setAnimationTime(framesRef.current[clamped].time) }
-    catch (e) { console.warn('setAnimationTime error:', e) }
-    onFramesRef.current?.(framesRef.current, clamped)
-  }
 
-  goToFrameRef.current = goToFrame
-  playRef.current      = play
-  pauseRef.current     = pause
-
-  // ── Layer management ─────────────────────────────────────────────────────────
-
-  function dropLayer() {
-    readyRef.current = false
-    stopLoop()
-    if (layerRef.current && mapRef.current) {
-      const id = layerRef.current.id ?? layerRef.current
-      try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
-      catch (e) { console.warn('removeLayer error:', e) }
-    }
-    layerRef.current     = null
-    layerTypeRef.current = null
-    framesRef.current    = []
-    onFramesRef.current?.([], 0)
-  }
-
-  async function loadLayer(type) {
-    if (loadingRef.current) return
-    loadingRef.current = true
-    layerTypeRef.current = type
-
-    const provider = settingsRef.current.radarProvider ?? 'maptiler'
-    if (type === 'radar' && provider !== 'maptiler') {
-      loadingRef.current = false
+    if (maptilerLayerRef.current) {
+      try { maptilerLayerRef.current.setAnimationTime(framesRef.current[clamped].time) }
+      catch (e) { console.warn('setAnimationTime error:', e) }
+      onFramesRef.current?.(framesRef.current, clamped)
       return
     }
 
-    let mw
-    try { mw = await import('@maptiler/weather') }
-    catch { console.error('Run: npm install @maptiler/weather'); loadingRef.current = false; return }
-    if (!mapRef.current) { loadingRef.current = false; return }
+    // Raster swap: show new, hide old
+    const map     = mapRef.current
+    const frameId = framesRef.current[clamped]?.layerId
+    if (!map || !frameId) return
 
-    const ClassMap = {
-      radar:         mw.RadarLayer,
-      wind:          mw.WindLayer,
-      precipitation: mw.PrecipitationLayer,
-      temperature:   mw.TemperatureLayer,
-      pressure:      mw.PressureLayer,
+    if (frameId !== activeIdRef.current) {
+      if (map.getLayer(frameId))
+        map.setPaintProperty(frameId, 'raster-opacity', opacityRef.current)
+      if (activeIdRef.current && map.getLayer(activeIdRef.current))
+        map.setPaintProperty(activeIdRef.current, 'raster-opacity', 0)
+      activeIdRef.current = frameId
     }
-    const LayerClass = ClassMap[type]
-    if (!LayerClass) { loadingRef.current = false; return }
 
-    if (layerRef.current && mapRef.current) {
-      const id = layerRef.current.id ?? layerRef.current
-      try { if (mapRef.current.getLayer(id)) mapRef.current.removeLayer(id) }
-      catch {}
-      layerRef.current = null
-    }
-    readyRef.current = false
+    onFramesRef.current?.(framesRef.current, clamped)
+  }
+
+  // Wire up refs and the radarControls object
+  playFnRef.current  = play
+  pauseFnRef.current = pause
+  seekFnRef.current  = idx => { pause(); goToFrame(idx) }
+
+  function wireControls() {
+    if (!radarControls) return
+    radarControls.seek       = idx => { pause(); goToFrame(idx) }
+    radarControls.togglePlay = ()  => { if (pausedRef.current) play(); else pause() }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Refresh timer
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function stopRefreshTimer() {
+    if (refreshTimerRef.current) { clearInterval(refreshTimerRef.current); refreshTimerRef.current = null }
+  }
+
+  function startRefreshTimer(provider) {
+    stopRefreshTimer()
+    refreshTimerRef.current = setInterval(() => {
+      const wasPlaying = !pausedRef.current
+      dropAllLayers()
+      loadLayer('radar', provider).then(() => { if (wasPlaying) play() })
+    }, RADAR_REFRESH_MS)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Layer teardown — single function that cleans up EVERYTHING
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function dropAllLayers() {
     stopLoop()
+    stopRefreshTimer()
+    sessionRef.current += 1  // invalidate any in-flight loadLayer
 
-    try {
+    readyRef.current  = false
+    pausedRef.current = true
+    framesRef.current = []
+    onPlayingRef.current?.(false)
+    onFramesRef.current?.([], 0)
+
+    const map = mapRef.current
+    if (!map) return
+
+    // Remove MapTiler weather layer
+    if (maptilerLayerRef.current) {
+      const id = maptilerLayerRef.current.id
+      try { if (map.getLayer(id)) map.removeLayer(id) } catch {}
+      maptilerLayerRef.current = null
+    }
+
+    // Remove all raster layers + sources (nexrad-* and rv-*)
+    for (const id of rasterIdsRef.current) {
+      try { if (map.getLayer(id))  map.removeLayer(id)  } catch {}
+      try { if (map.getSource(id)) map.removeSource(id) } catch {}
+    }
+    rasterIdsRef.current.clear()
+    activeIdRef.current = null
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Layer loading — one function, three code paths
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async function loadLayer(type, provider) {
+    const mySession = sessionRef.current
+    // Returns true if a newer dropAllLayers() or loadLayer() has started
+    const stale = () => sessionRef.current !== mySession || !mapRef.current
+
+    // ── Path 1: MapTiler weather layer (wind/precip/temp/pressure/maptiler radar) ──
+
+    if (type !== 'radar' || provider === 'maptiler') {
+      let mw
+      try { mw = await import('@maptiler/weather') }
+      catch { console.error('Run: npm install @maptiler/weather'); return }
+      if (stale()) return
+
+      const ClassMap = {
+        radar:         mw.RadarLayer,
+        wind:          mw.WindLayer,
+        precipitation: mw.PrecipitationLayer,
+        temperature:   mw.TemperatureLayer,
+        pressure:      mw.PressureLayer,
+      }
+      const LayerClass = ClassMap[type]
+      if (!LayerClass) return
+
+      const map   = mapRef.current
       const layer = new LayerClass()
-      layerRef.current = layer
-      mapRef.current.addLayer(layer)
+      maptilerLayerRef.current = layer
+      map.addLayer(layer)
 
       await layer.onSourceReadyAsync()
-
-      if (layerRef.current !== layer) {
-        loadingRef.current = false
+      if (stale()) {
+        // A switch happened while we were waiting — clean up this orphaned layer
+        try { if (mapRef.current?.getLayer(layer.id)) mapRef.current.removeLayer(layer.id) } catch {}
+        maptilerLayerRef.current = null
         return
       }
 
-      layer.setOpacity?.(opacityRef.current)
+      if (type !== 'wind') layer.setOpacity?.(opacityRef.current)
 
       const startSec = layer.getAnimationStart?.()
       const endSec   = layer.getAnimationEnd?.()
+      if (startSec == null || endSec == null) return
 
-      if (startSec == null || endSec == null) {
-        readyRef.current = false
-        onFramesRef.current?.([], 0)
-        loadingRef.current = false
-        return
-      }
-
-      const frames = buildFrames(startSec, endSec)
+      const frames = buildMaptilerFrames(startSec, endSec)
       framesRef.current = frames
 
       const nowSec = Date.now() / 1000
@@ -329,50 +420,100 @@ export default function Map({ settings, onMapClick, onFramesChange, onPlayingCha
 
       readyRef.current = true
       try { layer.pauseAnimation() } catch {}
-
       goToFrame(indexRef.current)
       onFramesRef.current?.(frames, indexRef.current)
 
-      if (type === 'radar') startRefreshTimer()
+      if (type === 'radar') startRefreshTimer(provider)
       if (animateRadarRef.current) play()
+      return
+    }
 
-    } catch (e) {
-      console.warn('loadLayer error:', e)
-      stopRefreshTimer()
-    } finally {
-      loadingRef.current = false
+    // ── Path 2: NEXRAD ────────────────────────────────────────────────────────
+
+    if (provider === 'nexrad') {
+      const rawFrames = buildNexradFrames()
+      if (stale()) return
+
+      const map = mapRef.current
+
+      // Add all frames as hidden raster layers up front.
+      // Doing this before waiting means all tiles start fetching in parallel.
+      for (const f of rawFrames) {
+        if (!map.getSource(f.layerId)) {
+          map.addSource(f.layerId, {
+            type:        'raster',
+            tiles:       [f.tileUrl],
+            tileSize:    256,
+            attribution: '© NOAA/NWS NEXRAD via Iowa State Mesonet',
+          })
+        }
+        if (!map.getLayer(f.layerId)) {
+          map.addLayer({ id: f.layerId, type: 'raster', source: f.layerId, paint: { 'raster-opacity': 0 } })
+        }
+        rasterIdsRef.current.add(f.layerId)
+      }
+
+      // Wait only for the most recent frame before making the layer "ready"
+      const lastFrame = rawFrames[rawFrames.length - 1]
+      await waitForSource(map, lastFrame.layerId)
+      if (stale()) { dropAllLayers(); return }
+
+      framesRef.current = rawFrames
+      indexRef.current  = rawFrames.length - 1
+      readyRef.current  = true
+
+      goToFrame(indexRef.current)
+      onFramesRef.current?.(rawFrames, indexRef.current)
+      startRefreshTimer(provider)
+      if (animateRadarRef.current) play()
+      return
+    }
+
+    // ── Path 3: RainViewer ────────────────────────────────────────────────────
+
+    if (provider === 'rainviewer') {
+      let rvData
+      try { rvData = await fetchRainviewerFrames() }
+      catch (e) { console.error('[RainViewer] fetch failed:', e); return }
+      if (stale()) return
+
+      const { host, frames: rawFrames } = rvData
+      if (!rawFrames.length) return
+
+      const map = mapRef.current
+
+      // Add all frames as hidden raster layers up front (parallel tile fetching)
+      for (const f of rawFrames) {
+        if (!map.getSource(f.layerId)) {
+          map.addSource(f.layerId, { type: 'raster', tiles: [rvTileUrl(host, f.path)], tileSize: 512 })
+        }
+        if (!map.getLayer(f.layerId)) {
+          map.addLayer({ id: f.layerId, type: 'raster', source: f.layerId, paint: { 'raster-opacity': 0 } })
+        }
+        rasterIdsRef.current.add(f.layerId)
+      }
+
+      // Start at the most recent past frame and wait for it to load
+      const nowSec   = Date.now() / 1000
+      const startIdx = rawFrames.reduce((best, f, i) =>
+        f.type === 'past' && f.time <= nowSec ? i : best
+      , 0)
+
+      await waitForSource(map, rawFrames[startIdx].layerId)
+      if (stale()) { dropAllLayers(); return }
+
+      framesRef.current = rawFrames
+      indexRef.current  = startIdx
+      readyRef.current  = true
+
+      goToFrame(startIdx)
+      onFramesRef.current?.(rawFrames, startIdx)
+      startRefreshTimer(provider)
+      if (animateRadarRef.current) play()
     }
   }
 
   return (
-    <>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }} />
-      {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'rainviewer' && (
-        <RainViewerRadar
-          key={radarKey}
-          map={mapRef.current}
-          opacity={settings.layerOpacity}
-          animationSpeed={settings.animationSpeed}
-          animateRadar={settings.animateRadar}
-          onFramesChange={onFramesChange}
-          onPlayingChange={onPlayingChange}
-          radarControls={radarControls}
-          onUnmount={rewireToMapTiler}
-        />
-      )}
-      {mapReady && settings.weatherLayer === 'radar' && settings.radarProvider === 'nexrad' && (
-        <NexradRadar
-          key={radarKey}
-          map={mapRef.current}
-          opacity={settings.layerOpacity}
-          animationSpeed={settings.animationSpeed}
-          animateRadar={settings.animateRadar}
-          onFramesChange={onFramesChange}
-          onPlayingChange={onPlayingChange}
-          radarControls={radarControls}
-          onUnmount={rewireToMapTiler}
-        />
-      )}
-    </>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }} />
   )
 }
