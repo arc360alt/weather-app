@@ -798,46 +798,21 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     }
     if (seq !== nowcastUpdateSeqRef.current || !latestNowcast?.length) return
 
-    const oldFrames = framesRef.current
-    const oldCurrent = oldFrames[indexRef.current]
-    const pastFrames = oldFrames.filter(f => f.type === 'past')
+    // Explicitly clear all old frames before setting new nowcast frames.
+    framesRef.current = [];
+    indexRef.current = 0;
 
-    // If we are currently showing a custom-nowcast-only sequence, replace all frames.
-    if (!pastFrames.length) {
-      const replacement = [...latestNowcast]
-      if (!replacement.length) return
+    const replacement = [...latestNowcast];
+    if (!replacement.length) return;
 
-      framesRef.current = replacement
-      const oldTime = oldCurrent?.time
-      const nextIdx = oldTime == null
-        ? replacement.length - 1
-        : replacement.reduce((best, f, i) => (Math.abs(f.time - oldTime) < Math.abs(replacement[best].time - oldTime) ? i : best), 0)
-      indexRef.current = Math.max(0, Math.min(replacement.length - 1, nextIdx))
+    framesRef.current = replacement;
+    // Always start at the latest frame (last in the array)
+    indexRef.current = replacement.length - 1;
 
-      goToFrame(indexRef.current)
-      onFramesRef.current?.(replacement, indexRef.current)
-      nowcastCoverageRef.current = { zoom: requestZoom, bbox: expandedBbox }
-      bringNwsWarningsToFront()
-      return
-    }
-
-    const maxPastTime = Math.max(...pastFrames.map(f => f.time))
-    const appended = latestNowcast.filter(f => f.time > maxPastTime)
-    if (!appended.length) return
-
-    const merged = [...pastFrames, ...appended]
-
-    framesRef.current = merged
-    const oldTime = oldCurrent?.time
-    const nextIdx = oldTime == null
-      ? merged.length - 1
-      : merged.reduce((best, f, i) => (Math.abs(f.time - oldTime) < Math.abs(merged[best].time - oldTime) ? i : best), 0)
-    indexRef.current = Math.max(0, Math.min(merged.length - 1, nextIdx))
-
-    goToFrame(indexRef.current)
-    onFramesRef.current?.(merged, indexRef.current)
-    nowcastCoverageRef.current = { zoom: requestZoom, bbox: expandedBbox }
-    bringNwsWarningsToFront()
+    goToFrame(indexRef.current);
+    onFramesRef.current?.(replacement, indexRef.current);
+    nowcastCoverageRef.current = { zoom: requestZoom, bbox: expandedBbox };
+    bringNwsWarningsToFront();
   }
 
   // Always keep this ref current so the SSE handler (which has an empty dep array)
