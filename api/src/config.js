@@ -7,6 +7,12 @@ function envNum(key, fallback) {
   return Number.isFinite(num) ? num : fallback
 }
 
+function envStr(key, fallback) {
+  const raw = env[key]
+  if (raw == null || raw === '') return fallback
+  return raw
+}
+
 function envBbox(key, fallback) {
   const raw = env[key]
   if (!raw) return fallback
@@ -16,7 +22,7 @@ function envBbox(key, fallback) {
 }
 
 export const config = {
-  host: env.HOST || '0.0.0.0',
+  host: envStr('HOST', '0.0.0.0'),
   port: envNum('PORT', 8788),
   cacheTtlMs: envNum('CACHE_TTL_MS', 600000),
   usBbox: envBbox('US_BBOX', [-125, 24, -66, 50]),
@@ -30,7 +36,7 @@ export const config = {
   tileFetchConcurrency: envNum('TILE_FETCH_CONCURRENCY', 48),
   // Disk directory for rendered tile PNGs and nowcast manifest.
   // Persists tiles across restarts so the first request after a restart is instant.
-  tileCacheDir: env.TILE_CACHE_DIR || '.cache',
+  tileCacheDir: envStr('TILE_CACHE_DIR', '.cache'),
   // How often (ms) to proactively rebuild the nowcast — matches NEXRAD update rate.
   nexradRefreshMs: envNum('NEXRAD_REFRESH_MS', 10 * 60 * 1000),
   tileSize: 256,
