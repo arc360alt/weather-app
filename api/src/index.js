@@ -62,7 +62,11 @@ app.get('/v1/nowcast/latest', async (req, reply) => {
 })
 
 app.get('/v1/nowcast/frames/:frame.png', async (req, reply) => {
-  await nowcastService.getNowcast(req.query || {})
+  // Trigger an initial build only if nothing is cached yet; never block on it
+  // once the service is warm — the LRU + disk caches handle everything else.
+  if (!nowcastService.latest) {
+    await nowcastService.getNowcast(req.query || {})
+  }
   const frame = parseInt(req.params.frame, 10)
   if (!Number.isInteger(frame) || frame < 0) {
     reply.code(400)
@@ -75,8 +79,15 @@ app.get('/v1/nowcast/frames/:frame.png', async (req, reply) => {
     return { error: 'frame_not_found' }
   }
 
+  const etag = `"${nowcastService.latest.generatedAt}:f${frame}"`
+  if (req.headers['if-none-match'] === etag) {
+    reply.code(304)
+    return reply.send()
+  }
+
   reply.header('content-type', 'image/png')
   reply.header('cache-control', 'public, max-age=600')
+  reply.header('etag', etag)
   reply.header('content-encoding', 'identity')  // Disable gzip; PNG is already compressed
   return reply.send(png)
 })
@@ -105,8 +116,15 @@ app.get('/v1/nowcast/tiles/:frame/:z/:x/:y.png', async (req, reply) => {
     return { error: 'nowcast_not_ready' }
   }
 
+  const etag = `"${nowcastService.latest?.generatedAt}:${frame}:${z}:${x}:${y}"`
+  if (req.headers['if-none-match'] === etag) {
+    reply.code(304)
+    return reply.send()
+  }
+
   reply.header('content-type', 'image/png')
   reply.header('cache-control', 'public, max-age=600')
+  reply.header('etag', etag)
   reply.header('content-encoding', 'identity')  // Disable gzip; PNG is already compressed
   return reply.send(tileData)
 })

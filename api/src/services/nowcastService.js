@@ -103,13 +103,13 @@ function bboxKey(bbox) {
 
 // ── LRU caches (L1 in front of disk) ─────────────────────────────────────────
 
-// Nowcast metadata+rgba frames.  4 slots: viewport-bbox builds are small;
-// full-US zoom-6 builds are ~17 MB/frame — both can coexist without eviction.
-const nowcastCache = new LRUCache({ max: 4, ttl: config.cacheTtlMs })
+// On a constrained CPU keep only 1 active build in the nowcast cache.
+// Viewport-bbox builds and full-US builds are small enough to share one slot.
+const nowcastCache = new LRUCache({ max: 2, ttl: config.cacheTtlMs })
 // Hot rendered 256×256 tile PNGs — avoids disk reads for recently hit tiles.
-const tileCache = new LRUCache({ max: 1200, ttl: config.cacheTtlMs })
+const tileCache = new LRUCache({ max: 600, ttl: config.cacheTtlMs })
 // Full-frame PNGs used by image-source fallback mode.
-const framePngCache = new LRUCache({ max: 96, ttl: config.cacheTtlMs })
+const framePngCache = new LRUCache({ max: 48, ttl: config.cacheTtlMs })
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -291,7 +291,21 @@ export class NowcastService {
       stepMinutes,
     })
 
-    const model = buildNowcastFrames({
+    // ── Source-freshness guard ────────────────────────────────────────────────
+    // If every raw radar tile was served from the in-memory tile cache, IEM
+    // hasn't published a new NEXRAD scan yet.  Skip the expensive motion-
+    // estimation + forecast rebuild and return the existing cached result.
+    // Do NOT skip if the current latest is a disk-restored skeleton (null RGBA)
+    // — we must rebuild at least once so tiles can actually be served.
+    const latestHasRgba = this.latest?.frames?.some(f => f.rgba != null)
+    if (!history.anyFresh && latestHasRgba
+        && this.latest.zoom === zoom
+        && bboxKey(buildBbox) === bboxKey(this.latest.usBbox)) {
+      console.log('[NowcastService] Radar data unchanged — skipping rebuild, serving cached result')
+      return this.latest
+    }
+
+    const model = await buildNowcastFrames({
       historyFrames: history.frames,
       minutesAhead,
       stepMinutes,

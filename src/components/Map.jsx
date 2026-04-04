@@ -7,17 +7,17 @@ import '@maptiler/sdk/dist/maptiler-sdk.css'
 const STEP_SEC         = 10 * 60
 const RADAR_REFRESH_MS = 10 * 60 * 1000
 const NWS_REFRESH_MS   = 2 * 60 * 1000
-const NOWCAST_MIN_ZOOM = 4
-const NOWCAST_MAX_ZOOM = 8
+const NOWCAST_MIN_ZOOM = 5
+const NOWCAST_MAX_ZOOM = 9
 const NOWCAST_CACHE_TTL_MS = 4 * 60 * 1000
 const NOWCAST_REQUEST_PADDING_RATIO = 0.3
 const NOWCAST_BBOX_SNAP_DEG = 0.25
 const NOWCAST_RETRY_DELAY_MS = 3000
 const NOWCAST_MAX_RETRIES = 40
 const NOWCAST_MINUTES_AHEAD = 60
-// Use zoom 6 for bundled image-frame nowcast — same as tile mode cap.
-// Zoom 8 would produce ~176 MB RGBA composites per frame; zoom 6 is ~17 MB.
-const BUNDLED_NOWCAST_ZOOM = 6
+// Use FIXED high-quality zoom for bundled image-frame nowcast
+// All frames at same zoom = aligned coordinates; map user-zoom doesn't affect frame zoom
+const BUNDLED_NOWCAST_ZOOM = 8
 const RAINVIEWER_API   = 'https://api.rainviewer.com/public/weather-maps.json'
 const NOWCAST_API_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname
 const CUSTOM_NOWCAST_API = import.meta.env.VITE_NOWCAST_API_BASE || `${window.location.protocol}//${NOWCAST_API_HOST}:8788`
@@ -222,10 +222,6 @@ async function fetchCustomNowcastFrames({ minutesAhead = NOWCAST_MINUTES_AHEAD, 
       // Keep both keys for compatibility with legacy raster loading code.
       tileUrl,
       tileSize: 256,
-      // The zoom at which the server built the composite.  Used as maxzoom on the
-      // raster source so MapLibre oversamples natively instead of requesting tiles
-      // beyond the built resolution (which produces tiny blurry crops).
-      compositeZoom: json.zoom ?? null,
     }
   })
 
@@ -591,18 +587,14 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
       if (!map.getSource(targetFrame.layerId)) {
         if (tileUrl) {
           // Prefer per-tile raster source — the map requests tiles at whatever zoom
-          // level it's currently at, so the server crops from the matching composite
-          // and returns native-resolution 256×256 tiles rather than a blurry
-          // upscale of a low-zoom full-frame image.
+          // level it's currently at (capped at compositeZoom so MapTiler oversamples
+          // natively rather than requesting sub-pixel crops).
           const sourceSpec = {
             type: 'raster',
             tiles: [tileUrl],
             tileSize: targetFrame.tileSize ?? 256,
             attribution: '© NOAA/NWS NEXRAD via Iowa State Mesonet',
           }
-          // Cap tile requests at the composite's built zoom.  Beyond this zoom
-          // MapLibre oversamples (upscales) the existing tiles natively, which
-          // is far sharper than the 1/8-scale crop the API would otherwise return.
           if (targetFrame.compositeZoom != null) sourceSpec.maxzoom = targetFrame.compositeZoom
           map.addSource(targetFrame.layerId, sourceSpec)
         } else if (targetFrame.imageUrl) {
@@ -767,6 +759,16 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     if (settingsRef.current.radarProvider !== 'nexrad' && settingsRef.current.radarProvider !== 'rainviewer') return
     if (settingsRef.current.radarProvider === 'nexrad' && settingsRef.current.radarMode === 'velocity') return
 
+    // Bundled image-frame mode is not viewport-dependent; refresh via SSE only.
+    // This prevents expensive rebuilds on every map zoom/pan.
+    if (
+      settingsRef.current.radarProvider === 'nexrad' &&
+      settingsRef.current.radarMode !== 'velocity' &&
+      framesRef.current.some(f => !!f.imageUrl)
+    ) {
+      return
+    }
+
     const viewBbox = getNowcastViewportBbox(map)
     const expandedBbox = expandNowcastRequestBbox(viewBbox)
     const requestZoom = getNowcastRequestZoom(map)
@@ -819,13 +821,8 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
       return
     }
 
-    // Only take forecast frames (type 'nowcast', minutesAhead > 0) from the
-    // custom nowcast.  The IEM t=0 observation frame has type 'past' and its
-    // validAt is Date.now() at build time, but the underlying composite can be
-    // 5-15 minutes behind the NEXRAD ridge tiles already on screen due to IEM
-    // composite ingestion latency.  Including it causes a visible storm-position
-    // jump backward at the NEXRAD→nowcast seam.
-    const appended = latestNowcast.filter(f => f.type === 'nowcast')
+    const maxPastTime = Math.max(...pastFrames.map(f => f.time))
+    const appended = latestNowcast.filter(f => f.time > maxPastTime)
     if (!appended.length) return
 
     const merged = [...pastFrames, ...appended]
@@ -1207,10 +1204,8 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
           if (stale() || !serverFrames?.length) return
 
           const currentFrames = framesRef.current
-          // Filter to forecast-only frames — same reason as refreshNowcastForCurrentView:
-          // IEM t=0 composite latency can make the observation frame appear behind the
-          // NEXRAD legacy tiles already showing, causing a backwards-jump at the seam.
-          const appendedNowcast = serverFrames.filter(f => f.type === 'nowcast')
+          const maxPastTime = Math.max(...currentFrames.filter(f => f.type === 'past').map(f => f.time))
+          const appendedNowcast = serverFrames.filter(f => f.time > maxPastTime)
           if (!appendedNowcast.length) return
 
           const merged = [...currentFrames, ...appendedNowcast]
