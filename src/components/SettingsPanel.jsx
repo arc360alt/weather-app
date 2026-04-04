@@ -237,6 +237,22 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
                 className="settings-range"
               />
             </Row>
+
+            <Row label={`Alert Opacity: ${Math.round((settings.warningLayerOpacity ?? 0.55) * 100)}%`}>
+              <input
+                type="range" min="0" max="1" step="0.05"
+                value={settings.warningLayerOpacity ?? 0.55}
+                onChange={e => set('warningLayerOpacity', parseFloat(e.target.value))}
+                className="settings-range"
+              />
+            </Row>
+
+            <Row label="NWS Warnings">
+              <Toggle checked={settings.showNwsWarnings} onChange={v => set('showNwsWarnings', v)} />
+            </Row>
+            <p className="settings-hint">
+              Shows active NOAA/NWS watches and warnings on top of all map and radar layers.
+            </p>
           </section>
 
           <section className="settings-section">
@@ -274,6 +290,32 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             ))}
           </div>
         </Row>
+        <Row label="Radar Product">
+          <div className="btn-group">
+            <button
+              className={`btn-option ${(settings.radarMode ?? 'reflectivity') === 'reflectivity' ? 'active' : ''}`}
+              onClick={() => set('radarMode', 'reflectivity')}
+            >
+              Reflectivity
+            </button>
+            <button
+              className={`btn-option ${settings.radarMode === 'velocity' ? 'active' : ''}`}
+              onClick={() => set('radarMode', 'velocity')}
+            >
+              Velocity
+            </button>
+          </div>
+        </Row>
+        {settings.radarProvider !== 'nexrad' && settings.radarMode === 'velocity' && (
+          <p className="settings-hint">
+            Velocity is currently available through NEXRAD in this app. Switch provider to NEXRAD to use it.
+          </p>
+        )}
+        {settings.radarProvider === 'nexrad' && settings.radarMode === 'velocity' && (
+          <p className="settings-hint">
+            Velocity uses the nearest NEXRAD radar site for your selected location (not a national composite).
+          </p>
+        )}
         {settings.radarProvider === 'rainviewer' && (
           <p className="settings-hint">
             Warning: This has no future forcast, use MapTiler for that.

@@ -1270,6 +1270,16 @@ body:has(.home-root),
   line-height: 1.4;
 }
 
+.alert-modal-meta-scroll {
+  max-height: 78px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.alert-modal-meta-scroll::-webkit-scrollbar { width: 4px; }
+.alert-modal-meta-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
 .alert-modal-body {
   flex: 1;
   overflow-y: auto;
@@ -1301,6 +1311,17 @@ body:has(.home-root),
   line-height: 1.7;
   white-space: pre-wrap;
 }
+
+.alert-modal-text-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.alert-modal-text-scroll::-webkit-scrollbar { width: 4px; }
+.alert-modal-text-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .alert-modal-footer {
   padding: 12px 18px;

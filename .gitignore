@@ -2,3 +2,10 @@ node_modules
 dist
 .env
 .env.local
+Python-3.12.13
+api/pysteps_service/.cache/
+api/pysteps_service/venv/
+pysteps_service
+.cache
+api-prenewmodel
+dgmr_service

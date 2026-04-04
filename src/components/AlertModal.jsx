@@ -88,7 +88,7 @@ export default function AlertModal({ alert, onClose }) {
           {p.areaDesc && (
             <div className="alert-modal-meta-item alert-modal-meta-full">
               <span className="alert-modal-meta-label">Affected Area</span>
-              <span className="alert-modal-meta-value">{p.areaDesc}</span>
+              <span className="alert-modal-meta-value alert-modal-meta-scroll">{p.areaDesc}</span>
             </div>
           )}
         </div>
@@ -98,13 +98,13 @@ export default function AlertModal({ alert, onClose }) {
           {p.description && (
             <div className="alert-modal-section">
               <h3 className="alert-modal-section-title">Description</h3>
-              <p className="alert-modal-text">{p.description}</p>
+              <p className="alert-modal-text alert-modal-text-scroll">{p.description}</p>
             </div>
           )}
           {p.instruction && (
             <div className="alert-modal-section">
               <h3 className="alert-modal-section-title">Instructions</h3>
-              <p className="alert-modal-text">{p.instruction}</p>
+              <p className="alert-modal-text alert-modal-text-scroll">{p.instruction}</p>
             </div>
           )}
         </div>

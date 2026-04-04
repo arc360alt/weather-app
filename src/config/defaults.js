@@ -9,10 +9,13 @@ export const DEFAULT_SETTINGS = {
   mapStyle: 'streets-v2', // Options: streets-v2, satellite, topo-v2, backdrop, ocean
   weatherLayer: 'radar',  // Options: radar, wind, precipitation, temperature, pressure
   layerOpacity: 0.7,
+  warningLayerOpacity: 0.35,
 
   // Radar animation
   animateRadar: true,
   animationSpeed: 3, // 1=slow, 3=normal, 6=fast
+  radarMode: 'reflectivity', // 'reflectivity' | 'velocity'
+  showNwsWarnings: false,
 
   // Units
   units: 'metric', // 'metric' | 'imperial'
@@ -31,7 +34,7 @@ export const DEFAULT_SETTINGS = {
   // Weather provider
   weatherProvider: 'openmeteo',  // 'openmeteo' | 'openweathermap'
   owmApiKey: '',
-  radarProvider: 'maptiler',
+  radarProvider: 'nexrad',
 }
 
 export const MAP_STYLES = [
@@ -95,4 +98,4 @@ export const RADAR_PROVIDERS = [
   { label: 'NEXRAD',     value: 'nexrad' },
 ]
 
-export const STORAGE_KEY = 'weather-app-settings'
+export const STORAGE_KEY = 'weather-app-settings-v2'

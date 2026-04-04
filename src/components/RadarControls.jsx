@@ -43,9 +43,18 @@ export default function RadarControls({ frames, currentIndex, playing, onSeek, o
   const label     = frame ? `${formatDate(frame.time)} · ${formatTime(frame.time)}` : ''
   const fillPct   = frames.length > 1 ? (safeIdx / (frames.length - 1)) * 100 : 0
 
-  const jumpToNow = () => onSeek(frames.findIndex((f, i) =>
-    i === frames.length - 1 || frames[i + 1].time > nowSec
-  ))
+  const jumpToNow = () => {
+    // Prefer the latest real NEXRAD observation (layerId starts with 'nexrad-').
+    // Custom nowcast frames also have type === 'past' so a plain past-filter
+    // could land on the nowcast's t=0 frame instead of the actual radar shot.
+    const nexradIdx = frames.findLastIndex(f => f.layerId?.startsWith('nexrad-'))
+    if (nexradIdx >= 0) { onSeek(nexradIdx); return }
+    // Fall back to the latest past frame of any source.
+    const pastIdx = frames.findLastIndex(f => f.type === 'past')
+    onSeek(pastIdx >= 0 ? pastIdx : frames.findIndex((f, i) =>
+      i === frames.length - 1 || frames[i + 1].time > nowSec
+    ))
+  }
 
   return (
     <div className="radar-bar">

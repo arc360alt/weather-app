@@ -1,0 +1,18 @@
+{
+  "name": "storm-nowcast-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "US radar nowcast API using recent NEXRAD composite imagery",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "fastify": "^5.0.0",
+    "lru-cache": "^11.0.1",
+    "p-limit": "^6.1.0",
+    "sharp": "^0.34.2"
+  }
+}
