@@ -19,7 +19,7 @@ const NOWCAST_MINUTES_AHEAD = 60
 // All frames at same zoom = aligned coordinates; map user-zoom doesn't affect frame zoom
 const BUNDLED_NOWCAST_ZOOM = 8
 const RAINVIEWER_API   = 'https://api.rainviewer.com/public/weather-maps.json'
-const NOWCAST_API_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname
+const NOWCAST_API_HOST = 'https://nowcast.arc360hub.com/'
 const CUSTOM_NOWCAST_API = import.meta.env.VITE_NOWCAST_API_BASE || `${window.location.protocol}//${NOWCAST_API_HOST}:8788`
 const NWS_ALERTS_API   = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert'
 const NEXRAD_SITES_API = 'https://mesonet.agron.iastate.edu/geojson/network.py?network=NEXRAD'
