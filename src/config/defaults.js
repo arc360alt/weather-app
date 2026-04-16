@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS = {
   showNwsWarnings: false,
 
   // Units
-  units: 'metric', // 'metric' | 'imperial'
+  units: 'imperial', // 'metric' | 'imperial'
 
   // UI preferences
   panelPosition: 'left',   // 'left' | 'right'
@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS = {
   chartType: 'temperature', // 'temperature' | 'precipitation' | 'wind'
 
   // Weather provider
-  weatherProvider: 'openmeteo',  // 'openmeteo' | 'openweathermap'
+  weatherProvider: 'nws',  // 'openmeteo' | 'openweathermap'
   owmApiKey: '',
   radarProvider: 'nexrad',
 }

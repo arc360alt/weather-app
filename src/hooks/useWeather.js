@@ -196,6 +196,17 @@ async function fetchBestObservation(stationsUrl, headers) {
   return null
 }
 
+async function fetchUvFromOpenMeteo(lat, lon) {
+  try {
+    const r = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=uv_index&daily=uv_index_max&forecast_days=8&timezone=auto`
+    )
+    if (!r.ok) return null
+    return await r.json()
+  } catch { return null }
+}
+
 async function fetchNWS(lat, lon, units) {
   const headers = { 'User-Agent': 'WeatherApp/1.0', 'Accept': 'application/geo+json' }
 
@@ -216,11 +227,12 @@ async function fetchNWS(lat, lon, units) {
 
   if (!hourlyUrl || !dailyUrl) throw new Error('NWS did not return forecast URLs.')
 
-  const [hourlyRes, dailyRes, gridRes, obsProps] = await Promise.all([
+  const [hourlyRes, dailyRes, gridRes, obsProps, uvJson] = await Promise.all([
     fetch(hourlyUrl, { headers }),
     fetch(dailyUrl,  { headers }),
     gridUrl ? fetch(gridUrl, { headers }) : Promise.resolve(null),
     fetchBestObservation(stationsUrl, headers),
+    fetchUvFromOpenMeteo(lat, lon),   // ← add this
   ])
 
   if (!hourlyRes.ok) throw new Error(`NWS hourly failed (HTTP ${hourlyRes.status})`)
@@ -234,6 +246,7 @@ async function fetchNWS(lat, lon, units) {
 
   let gridWindMap   = null
   let gridQPFValues = null
+  let gridUvValues  = null
 
   if (gridRes?.ok) {
     try {
@@ -243,6 +256,8 @@ async function fetchNWS(lat, lon, units) {
         gridWindMap = expandGridSeries(props.windSpeed.values)
       if (props.quantitativePrecipitation?.values?.length)
         gridQPFValues = props.quantitativePrecipitation.values
+      if (props.uvIndex?.values?.length)
+        gridUvValues = expandGridSeries(props.uvIndex.values)
     } catch { /* non-fatal */ }
   }
 
@@ -373,7 +388,7 @@ async function fetchNWS(lat, lon, units) {
       relative_humidity_2m:  currentHumidity,
       precipitation:         0,
       surface_pressure:      currentPressure,
-      uv_index:              null,
+      uv_index: uvJson?.current?.uv_index ?? null,
     },
     hourly: {
       time:                      hourlyTime,
@@ -395,7 +410,13 @@ async function fetchNWS(lat, lon, units) {
       wind_speed_10m_min:            dailyWindMin,
       sunrise:                       dailySunrise,
       sunset:                        dailySunset,
-      uv_index_max:                  dailyTime.map(() => null),
+      uv_index_max: (() => {
+        const arr = uvJson?.daily?.uv_index_max ?? dailyTime.map(() => null)
+        // If it's currently night (no current UV), zero out today's displayed max
+        const currentUv = uvJson?.current?.uv_index ?? 0
+        if (currentUv === 0 && arr.length > 0) arr[0] = 0
+        return arr
+      })(),
     },
   }
 }

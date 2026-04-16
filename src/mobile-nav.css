@@ -1,0 +1,122 @@
+/* ── Mobile Bottom Nav ──────────────────────────────────────────────────────── */
+:root {
+  --mobile-nav-h: 0px; /* overridden on mobile */
+}
+
+.mobile-nav {
+  display: none; /* hidden on desktop */
+}
+
+@media (max-width: 1328px) {
+  :root {
+    --mobile-nav-h: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: var(--mobile-nav-h);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(6, 13, 23, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+    align-items: stretch;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 8px;
+    color: var(--text-muted);
+    transition: color var(--transition);
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-nav-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 40px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 0 0 2px 2px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .mobile-nav-btn.mobile-nav-active::before {
+    transform: translateX(-50%) scaleX(1);
+  }
+
+  .mobile-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    transition: background var(--transition), transform 0.15s ease;
+  }
+
+  .mobile-nav-btn:active .mobile-nav-icon {
+    transform: scale(0.9);
+  }
+
+  .mobile-nav-active .mobile-nav-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent);
+  }
+
+  .mobile-nav-active {
+    color: var(--accent);
+  }
+
+  .mobile-nav-label {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Push content above the nav bar ──────────────────────────────────────── */
+
+  /* Radar controls bar: sits just above the nav */
+  .radar-bar {
+    bottom: var(--mobile-nav-h) !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* Forecast toggle button: sits above both radar bar and nav */
+  .mobile-panel-toggle {
+    bottom: calc(var(--mobile-nav-h) + 56px + 16px) !important;
+  }
+
+  /* When radar bar is NOT visible, toggle sits just above nav */
+  /* (JS adds no class for this, so we use a sensible default via the base rule above) */
+
+  /* Home page footer: push up so nav doesn't cover it */
+  .home-footer {
+    bottom: var(--mobile-nav-h);
+  }
+
+  /* Home page main content: add padding so launch button isn't behind nav */
+  .home-main {
+    padding-bottom: calc(var(--mobile-nav-h) + 24px);
+  }
+}
