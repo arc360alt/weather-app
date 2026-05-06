@@ -896,9 +896,19 @@ body:has(.hm-root),
     margin-bottom: 14px;
   }
 
-  /* Hourly: show more pills, slightly wider */
-  .hm-main-panel .hm-hourly-scroll { gap: 6px; }
-  .hm-main-panel .hm-hourly-item   { min-width: 82px; padding: 10px 12px; min-height: 94px; }
+/* REPLACE WITH */
+.hm-main-panel .hm-hourly-scroll {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  overflow: visible;
+  padding-bottom: 8px;
+  cursor: default;
+}
+.hm-main-panel .hm-hourly-item {
+  min-width: 0;
+  padding: 4px 4px;
+}
 
   /* 7-day: expand rows nicely */
   .hm-main-panel .hm-daily-row { padding: 9px 4px; }
@@ -1113,4 +1123,14 @@ body:has(.hm-root),
   .hm-desktop-bottom-grid > .hm-section:not(:last-child) {
     border-right: 1px solid var(--border);
   }
+}
+
+.hm-hourly-day-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+  white-space: nowrap;
 }

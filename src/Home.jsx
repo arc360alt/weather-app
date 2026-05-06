@@ -248,7 +248,22 @@ function HourlyRow({ hourly, units }) {
         const { icon } = getWeatherInfo(codes[i])
         return (
           <div key={t} className="hm-hourly-item">
-            <div className="hm-hourly-time">{i === 0 ? 'Now' : formatHourShort(t)}</div>
+              <div className="hm-hourly-time">
+                {i === 0 ? 'Now' : formatHourShort(t)}
+                {i !== 0 && (() => {
+                  const thisDay = new Date(t).getDate()
+                  const prevDay = new Date(slice[i - 1]).getDate()
+                  const today = new Date().getDate()
+                  const tomorrow = new Date(Date.now() + 86400000).getDate()
+                  if (thisDay !== prevDay) {
+                    const label = thisDay === today ? 'Today'
+                      : thisDay === tomorrow ? 'Tmrw'
+                      : new Date(t).toLocaleDateString('en-US', { weekday: 'short' })
+                    return <div className="hm-hourly-day-label">{label}</div>
+                  }
+                  return null
+                })()}
+              </div>
             <div className="hm-hourly-icon">{icon}</div>
             <div className="hm-hourly-temp">{Math.round(temps[i])}{tempUnit}</div>
             {probs[i] > 10 && <div className="hm-hourly-precip">💧{probs[i]}%</div>}
