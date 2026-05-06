@@ -2,18 +2,18 @@ import { useState, useEffect, useRef } from 'react'
 
 const UPDATES = [
   {
-    id:      'v2.0-2026-04-16',
-    date:    'April 16, 2026',
-    expires: '05-20-2026',
-    version: 'v2.0',
-    title:   'New homepage and mobile navigation!',
+    id:      'v2.0-2026-05-06',
+    date:    'May 6, 2026',
+    expires: '05-29-2026',
+    version: 'v2.1',
+    title:   'Introducing... StormCast API!',
     items: [
-      { icon: '🌐', text: 'Brought back the homepage and rewrote it.' },
-      { icon: '💨', text: 'Remade mobile navigation to be easier and better.' },
-      { icon: '🌡️', text: 'FINNALY fixed UV index not working on NWS mode.' },
+      { icon: '🌐', text: 'Brand new Weather Radar API running on our own servers with nowcast!' },
+      { icon: '💨', text: 'Update a bunch of the defualt settings to make the defualt expereance much better.' },
+      { icon: '🌡️', text: 'Cleaned up some code.' },
       // { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
       // { icon: '🕐', text: 'Fixed all timestamp handling' },
-      { icon: '🔧', text: 'Simple bug fixes' },
+      { icon: '🔧', text: 'Bug fixes' },
     ],
   },
 ]

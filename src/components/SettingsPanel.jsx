@@ -250,9 +250,6 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             <Row label="NWS Warnings">
               <Toggle checked={settings.showNwsWarnings} onChange={v => set('showNwsWarnings', v)} />
             </Row>
-            <p className="settings-hint">
-              Shows active NOAA/NWS watches and warnings on top of all map and radar layers.
-            </p>
           </section>
 
           <section className="settings-section">
@@ -290,7 +287,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             ))}
           </div>
         </Row>
-        <Row label="Radar Product">
+        {/*<Row label="Radar Product">
           <div className="btn-group">
             <button
               className={`btn-option ${(settings.radarMode ?? 'reflectivity') === 'reflectivity' ? 'active' : ''}`}
@@ -305,7 +302,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
               Velocity
             </button>
           </div>
-        </Row>
+        </Row>*/}
         {settings.radarProvider !== 'nexrad' && settings.radarMode === 'velocity' && (
           <p className="settings-hint">
             Velocity is currently available through NEXRAD in this app. Switch provider to NEXRAD to use it.
@@ -318,7 +315,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
         )}
         {settings.radarProvider === 'rainviewer' && (
           <p className="settings-hint">
-            Warning: This has no future forcast, use MapTiler for that.
+            
           </p>
         )}
         {settings.radarProvider === 'nexrad' && (

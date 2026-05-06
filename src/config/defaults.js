@@ -1,18 +1,18 @@
 // Default application configuration
 export const DEFAULT_SETTINGS = {
   // Location
-  lat: 40.71,
-  lon: -74.01,
-  locationName: 'New York, NY',
+  lat: 41.88,
+  lon: 87.63,
+  locationName: 'Chicago, IL',
 
   // Map appearance
-  mapStyle: 'streets-v2', // Options: streets-v2, satellite, topo-v2, backdrop, ocean
+  mapStyle: 'satellite', // Options: streets-v2, satellite, topo-v2, backdrop, ocean
   weatherLayer: 'radar',  // Options: radar, wind, precipitation, temperature, pressure
   layerOpacity: 0.7,
   warningLayerOpacity: 0.35,
 
   // Radar animation
-  animateRadar: true,
+  animateRadar: false,
   animationSpeed: 3, // 1=slow, 3=normal, 6=fast
   radarMode: 'reflectivity', // 'reflectivity' | 'velocity'
   showNwsWarnings: false,
@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS = {
   panelPosition: 'left',   // 'left' | 'right'
   showHourlyChart: true,
   showDailyForecast: true,
-  show7DayChart: false,
+  show7DayChart: true,
   darkMode: true,
   showRadarBar: true,
 
@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS = {
   // Weather provider
   weatherProvider: 'nws',  // 'openmeteo' | 'openweathermap'
   owmApiKey: '',
-  radarProvider: 'nexrad',
+  radarProvider: 'rainviewer',
 }
 
 export const MAP_STYLES = [
@@ -94,7 +94,7 @@ export const WEATHER_CODES = {
 
 export const RADAR_PROVIDERS = [
   { label: 'MapTiler',   value: 'maptiler' },
-  { label: 'RainViewer', value: 'rainviewer' },
+  { label: 'StormCast', value: 'rainviewer' },
   { label: 'NEXRAD',     value: 'nexrad' },
 ]
 

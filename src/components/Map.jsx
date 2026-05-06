@@ -7,20 +7,7 @@ import '@maptiler/sdk/dist/maptiler-sdk.css'
 const STEP_SEC         = 10 * 60
 const RADAR_REFRESH_MS = 10 * 60 * 1000
 const NWS_REFRESH_MS   = 2 * 60 * 1000
-const NOWCAST_MIN_ZOOM = 5
-const NOWCAST_MAX_ZOOM = 9
-const NOWCAST_CACHE_TTL_MS = 4 * 60 * 1000
-const NOWCAST_REQUEST_PADDING_RATIO = 0.3
-const NOWCAST_BBOX_SNAP_DEG = 0.25
-const NOWCAST_RETRY_DELAY_MS = 3000
-const NOWCAST_MAX_RETRIES = 40
-const NOWCAST_MINUTES_AHEAD = 60
-// Use FIXED high-quality zoom for bundled image-frame nowcast
-// All frames at same zoom = aligned coordinates; map user-zoom doesn't affect frame zoom
-const BUNDLED_NOWCAST_ZOOM = 8
-const RAINVIEWER_API   = 'https://api.rainviewer.com/public/weather-maps.json'
-const NOWCAST_API_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname
-const CUSTOM_NOWCAST_API = 'https://nowcast.arc360hub.com'
+const RAINVIEWER_API = 'https://stormcastapi.arc360hub.com/public/weather-maps.json'
 const NWS_ALERTS_API   = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert'
 const NEXRAD_SITES_API = 'https://mesonet.agron.iastate.edu/geojson/network.py?network=NEXRAD'
 const NEXRAD_OFFSETS   = [60, 50, 40, 30, 20, 10, 0] // minutes ago
@@ -83,7 +70,7 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 async function fetchRainviewerFrames() {
   const res  = await fetch(RAINVIEWER_API)
   const json = await res.json()
-  const host = json.host
+  const host = 'https://stormcastapi.arc360hub.com'
   const past    = json.radar?.past    ?? []
   const nowcast = json.radar?.nowcast ?? []
   const frames  = [
@@ -303,12 +290,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
   // NEXRAD site metadata cache (for nearest-station velocity mode)
   const nexradSitesRef = useRef(null)
-  const nowcastCacheRef = useRef(new globalThis.Map())
-  const nowcastInFlightRef = useRef(new globalThis.Map())
-  const nowcastUpdateSeqRef = useRef(0)
-  const nowcastCoverageRef = useRef(null)
-  // Always points to the latest refreshNowcastForCurrentView (avoids stale-closure in SSE handler)
-  const nowcastRefreshRef = useRef(null)
 
   // ── Settings refs (avoid stale closures in async code) ───────────────────
   const speedRef        = useRef(settings.animationSpeed)
@@ -490,44 +471,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     loadLayer('radar', settings.radarProvider)
   }, [settings.radarMode]) // eslint-disable-line
 
-  useEffect(() => {
-    // Subscribe to server-sent nowcast update events.
-    // When the server generates a fresh nowcast, it pushes an 'update' event here,
-    // which clears the frontend cache and hot-swaps the forecast frames.
-    const es = new EventSource(`${CUSTOM_NOWCAST_API}/v1/nowcast/updates`)
-    es.addEventListener('update', () => {
-      nowcastCacheRef.current.clear()
-      nowcastCoverageRef.current = null
-      nowcastRefreshRef.current?.()
-    })
-    es.onerror = () => {
-      // EventSource reconnects automatically — no action needed
-      console.warn('[Nowcast] SSE connection error — reconnecting automatically')
-    }
-    return () => es.close()
-  }, []) // eslint-disable-line
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    let timer = null
-    const triggerRefresh = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
-        nowcastRefreshRef.current?.()
-      }, 200)
-    }
-
-    map.on('moveend', triggerRefresh)
-    map.on('zoomend', triggerRefresh)
-
-    return () => {
-      map.off('moveend', triggerRefresh)
-      map.off('zoomend', triggerRefresh)
-      if (timer) clearTimeout(timer)
-    }
-  }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Animation
@@ -593,7 +536,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
             type: 'raster',
             tiles: [tileUrl],
             tileSize: targetFrame.tileSize ?? 256,
-            attribution: '© NOAA/NWS NEXRAD via Iowa State Mesonet',
+            attribution: '© StormCast API | NEXRAD Mesonet | MapTiler Weather Layer',
           }
           if (targetFrame.compositeZoom != null) sourceSpec.maxzoom = targetFrame.compositeZoom
           map.addSource(targetFrame.layerId, sourceSpec)
@@ -785,13 +728,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
     let latestNowcast
     try {
-      latestNowcast = await fetchNowcastFramesCached({
-        minutesAhead: NOWCAST_MINUTES_AHEAD,
-        stepMinutes: 10,
-        zoom: requestZoom,
-        bbox: expandedBbox,
-        retries: 8,
-      })
     } catch (e) {
       console.warn('[Custom nowcast] refresh failed:', e)
       return
@@ -815,9 +751,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     bringNwsWarningsToFront();
   }
 
-  // Always keep this ref current so the SSE handler (which has an empty dep array)
-  // always calls the latest version of the function.
-  nowcastRefreshRef.current = refreshNowcastForCurrentView
 
   function startNwsWarningsTimer() {
     stopNwsWarningsTimer()
@@ -1044,7 +977,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     }
     rasterIdsRef.current.clear()
     activeIdRef.current = null
-    nowcastCoverageRef.current = null
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1165,34 +1097,6 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
       if (animateRadarRef.current) play()
 
       // If fallback legacy timeline is active (past-only), append bundled custom nowcast.
-      ;(async () => {
-        if (rawFrames.some(f => f.type === 'nowcast')) return
-        try {
-          const requestZoom = BUNDLED_NOWCAST_ZOOM
-          const serverFrames = await fetchNowcastFramesCached({
-            minutesAhead: NOWCAST_MINUTES_AHEAD,
-            stepMinutes: 10,
-            zoom: requestZoom,
-            bbox: null,
-            retries: 8,
-          })
-          if (stale() || !serverFrames?.length) return
-
-          const currentFrames = framesRef.current
-          const maxPastTime = Math.max(...currentFrames.filter(f => f.type === 'past').map(f => f.time))
-          const appendedNowcast = serverFrames.filter(f => f.time > maxPastTime)
-          if (!appendedNowcast.length) return
-
-          const merged = [...currentFrames, ...appendedNowcast]
-          framesRef.current = merged
-          onFramesRef.current?.(merged, indexRef.current)
-          nowcastCoverageRef.current = null
-          bringNwsWarningsToFront()
-          nowcastRefreshRef.current?.()
-        } catch (e) {
-          console.warn('[Custom nowcast] initial background load failed:', e)
-        }
-      })()
       return
     }
 
@@ -1241,16 +1145,8 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
       // Extend RainViewer with custom nowcast in background.
       ;(async () => {
         try {
-          const viewBbox = getNowcastViewportBbox(map)
           const expandedBbox = expandNowcastRequestBbox(viewBbox)
           const requestZoom = getNowcastRequestZoom(map)
-          const extraNowcast = await fetchNowcastFramesCached({
-            minutesAhead: NOWCAST_MINUTES_AHEAD,
-            stepMinutes: 10,
-            zoom: requestZoom,
-            bbox: expandedBbox,
-            retries: 2,
-          })
           if (stale() || !extraNowcast.length) return
 
           const currentFrames = framesRef.current
@@ -1267,7 +1163,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
           bringNwsWarningsToFront()
           nowcastRefreshRef.current?.()
         } catch (e) {
-          console.warn('[Custom nowcast] unavailable for RainViewer extension:', e)
+          
         }
       })()
     }
