@@ -425,7 +425,7 @@ body:has(.hm-root),
   gap: 8px;
 }
 .hm-daily-lo { font-size: 13px; color: var(--text-sec); flex-shrink: 0; width: 36px; text-align: right; }
-.hm-daily-hi { font-size: 13px; color: var(--orange); font-weight: 700; flex-shrink: 0; width: 36px; }
+.hm-daily-hi { font-size: 15px; color: var(--orange); font-weight: 510; flex-shrink: 0; width: 36px; }
 
 .hm-daily-bar-track {
   flex: 1;

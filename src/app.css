@@ -1416,6 +1416,7 @@ body:has(.home-root),
     overflow: hidden;
     box-shadow: 0 -12px 48px rgba(0,0,0,0.7);
     touch-action: pan-x;
+    margin-bottom: 52px;
   }
 
   .panel-container.panel-mobile-open {
@@ -1803,6 +1804,7 @@ body:has(.home-root),
     max-width: 100%;
     border-radius: 18px 18px 0 0;
     max-height: 85vh;
+    margin-bottom: 56px;
   }
 
   @keyframes update-slide-in {
