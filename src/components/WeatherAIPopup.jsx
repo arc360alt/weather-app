@@ -59,7 +59,7 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
     setErrorMsg(null)
 
     try {
-      const res = await fetch('/api/weather-ai', {
+      const res = await fetch('https://stormviewapi.arc360hub.com/api/weather-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal,

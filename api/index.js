@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 
 const app = express()
-app.use(cors())
+app.use(cors({ origin: 'https://weather.arc360hub.com' }))
 app.use(express.json({ limit: '2mb' }))
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
