@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const GEMINI_MODEL = 'gemini-2.0-flash-lite'
+const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`
 const INIT_PROMPT = "Give me a brief summary of today's conditions and what to expect this week. Keep it to 2-3 sentences."
 const REFRESH_MS = 30 * 60 * 1000
