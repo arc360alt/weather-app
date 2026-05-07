@@ -304,7 +304,7 @@ body:has(.hm-root),
   display: block;
 }
 .hm-radar-base { image-rendering: pixelated; }
-.hm-radar-overlay { mix-blend-mode: screen; opacity: 0.9; }
+.hm-radar-overlay { opacity: 1; }
 
 .hm-radar-pin {
   position: absolute;
