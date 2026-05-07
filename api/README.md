@@ -1,4 +1,3 @@
-# StormView Nowcast
-The most broken NowCast system Of All Time!
+# StormView API
 
-WIP
+Coming soon, still a WIP.
