@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 const INIT_PROMPT =
   "Give me a brief summary of today's conditions and what to expect this week. Keep it to 2-3 sentences."
 
+const REFRESH_MS = 30 * 60 * 1000 // 30 minutes
+
 export default function WeatherAIPopup({ weatherData, locationName, units, isOpen, onClose }) {
   const [chatMessages, setChatMessages] = useState([])
   const [input, setInput] = useState('')
@@ -14,6 +16,7 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
   const inputRef = useRef(null)
   const abortRef = useRef(null)
   const didInit = useRef(false)
+  const lastOpenedAt = useRef(null)
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -35,19 +38,22 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
     return () => document.removeEventListener('keydown', handler)
   }, [isOpen, onClose])
 
-  // Abort in-flight request on unmount
   useEffect(() => {
     return () => { abortRef.current?.abort() }
   }, [])
 
-  const runQuery = useCallback(async (history, text) => {
+  // Stream helper shared by both init and follow-up queries.
+  // `seedMessages` are sent to the API but only `appendToUI` controls
+  // whether a user bubble is added to the visible chat.
+  const streamResponse = useCallback(async (apiMessages, appendUserBubble) => {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     const { signal } = abortRef.current
 
-    const userMsg = { role: 'user', content: text }
-    const allMsgs = [...history, userMsg]
-    setChatMessages(allMsgs)
+    if (appendUserBubble) {
+      setChatMessages(prev => [...prev, appendUserBubble])
+    }
+
     setIsStreaming(true)
     setLiveText('')
     setErrorMsg(null)
@@ -58,7 +64,7 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
         headers: { 'Content-Type': 'application/json' },
         signal,
         body: JSON.stringify({
-          messages: allMsgs,
+          messages: apiMessages,
           weatherData: {
             current: weatherData?.current,
             daily: weatherData?.daily,
@@ -97,7 +103,7 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
               setLiveText(full)
             }
           } catch {
-            // skip malformed SSE data
+            // skip malformed SSE lines
           }
         }
       }
@@ -115,13 +121,36 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
     }
   }, [weatherData, locationName, units])
 
-  // Auto-send initial summary once when popup opens with weather data
+  // Silent init: sends the prompt to the API but shows NO user bubble.
+  const runInit = useCallback(() => {
+    streamResponse([{ role: 'user', content: INIT_PROMPT }], null)
+  }, [streamResponse])
+
+  // Follow-up: shows a user bubble + AI reply.
+  const runQuery = useCallback((history, text) => {
+    const userMsg = { role: 'user', content: text }
+    streamResponse([...history, userMsg], userMsg)
+  }, [streamResponse])
+
+  // On every open: check if a refresh is due, then init if needed.
   useEffect(() => {
-    if (isOpen && !didInit.current && weatherData?.current) {
-      didInit.current = true
-      runQuery([], INIT_PROMPT)
+    if (!isOpen || !weatherData?.current) return
+
+    const now = Date.now()
+    const stale = !lastOpenedAt.current || (now - lastOpenedAt.current >= REFRESH_MS)
+
+    if (stale) {
+      lastOpenedAt.current = now
+      didInit.current = false
+      setChatMessages([])
+      setErrorMsg(null)
     }
-  }, [isOpen, weatherData, runQuery])
+
+    if (!didInit.current) {
+      didInit.current = true
+      runInit()
+    }
+  }, [isOpen, weatherData, runInit])
 
   const handleSubmit = (e) => {
     e.preventDefault()
