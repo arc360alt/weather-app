@@ -3,28 +3,29 @@ import cors from 'cors'
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '2mb' }))
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
 const MODEL = process.env.OLLAMA_MODEL || 'llama3.2:1b'
 
 const WMO_CODES = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-  45: 'Foggy', 48: 'Depositing rime fog',
+  45: 'Foggy', 48: 'Rime fog',
   51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
   61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
   71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow', 77: 'Snow grains',
-  80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+  80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent showers',
   85: 'Slight snow showers', 86: 'Heavy snow showers',
-  95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
+  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
 }
 
 function wmoDesc(code) {
-  return WMO_CODES[code] ?? `Conditions (code ${code})`
+  return WMO_CODES[code] ?? `Unknown (code ${code})`
 }
 
-function round(v) {
-  return v != null ? Math.round(v) : null
+function r(v, digits = 0) {
+  if (v == null) return 'N/A'
+  return digits === 0 ? String(Math.round(v)) : v.toFixed(digits)
 }
 
 function windDir(deg) {
@@ -32,19 +33,29 @@ function windDir(deg) {
   return dirs[Math.round((deg ?? 0) / 45) % 8]
 }
 
+function fmtHour(iso) {
+  const d = new Date(iso)
+  const h = d.getHours()
+  if (h === 0) return '12am'
+  if (h === 12) return '12pm'
+  return h > 12 ? `${h - 12}pm` : `${h}am`
+}
+
+function fmtDay(iso) {
+  if (!iso) return 'N/A'
+  const [y, m, day] = iso.split('T')[0].split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  })
+}
+
 function fmtTime(iso) {
   if (!iso) return null
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function fmtDay(iso) {
-  if (!iso) return null
-  const [y, m, d] = iso.split('T')[0].split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-}
-
 function buildSystemPrompt(weatherData) {
-  const { current: c, daily: d, locationName, units } = weatherData
+  const { current: c, hourly: h, daily: d, locationName, units } = weatherData
   const tU = units === 'imperial' ? '°F' : '°C'
   const wU = units === 'imperial' ? 'mph' : 'km/h'
   const pU = units === 'imperial' ? 'in' : 'mm'
@@ -53,46 +64,81 @@ function buildSystemPrompt(weatherData) {
     `You are a friendly, casual weather assistant for ${locationName || 'this location'}.`,
     ``,
     `LANGUAGE RULES — follow these strictly:`,
-    `- All data you receive is forecast data, which is inherently uncertain. Never use definitive future tense like "will", "is going to", or "are expected". Instead use hedging phrases: "looks like", "there's a chance of", "could see", "might", "should be around", "models are showing".`,
-    `- Write natural, grammatically correct English. Match plurals to quantities (e.g. "1 inch" not "1 inches", "a few showers" not "a showers"). Read your sentence back before finishing it.`,
-    `- Keep it conversational and concise — like a text from a friend who checked the weather app. Under 80 words unless the user asks for more detail.`,
-    `- Plain text only. No markdown, no bullet points, no headers.`,
+    `- All data is forecast data and inherently uncertain. Never say "will", "is going to", or "are expected". Always hedge: "looks like", "could see", "might", "there's a chance of", "models are showing", "should be around".`,
+    `- Write natural, grammatically correct English. Match plurals to quantities ("1 inch", not "1 inches"). Reread each sentence before finishing it.`,
+    `- Be conversational and concise — like a text from a friend who checked the weather app. Under 80 words unless asked for more.`,
+    `- Plain text only. No markdown, bullet points, or headers.`,
     ``,
-    `=== CURRENT CONDITIONS ===`,
-    `Conditions: ${wmoDesc(c?.weather_code)}`,
-    `Temperature: ${round(c?.temperature_2m)}${tU} (feels like ${round(c?.apparent_temperature)}${tU})`,
-    `Wind: ${round(c?.wind_speed_10m)} ${wU} from the ${windDir(c?.wind_direction_10m)}`,
-    `Humidity: ${c?.relative_humidity_2m}%`,
-    c?.surface_pressure ? `Pressure: ${round(c.surface_pressure)} hPa` : null,
-    c?.uv_index != null ? `UV Index: ${c.uv_index}` : null,
-    c?.precipitation != null ? `Current precipitation: ${c.precipitation} ${pU}` : null,
-  ].filter(Boolean)
+  ]
 
-  if (d?.time?.length) {
-    lines.push('', '=== 7-DAY FORECAST ===')
-    for (let i = 0; i < Math.min(7, d.time.length); i++) {
-      const parts = [
-        fmtDay(d.time[i]),
-        wmoDesc(d.weather_code?.[i]),
-        `High ${round(d.temperature_2m_max?.[i])}${tU}`,
-        `Low ${round(d.temperature_2m_min?.[i])}${tU}`,
-      ]
-      if ((d.precipitation_probability_max?.[i] ?? 0) > 10) {
-        parts.push(`${d.precipitation_probability_max[i]}% rain chance`)
-      }
-      if ((d.precipitation_sum?.[i] ?? 0) > 0) {
-        parts.push(`${d.precipitation_sum[i]}${pU} precip`)
-      }
-      lines.push(parts.join(' — '))
+  // ── Current conditions ───────────────────────────────────────────────────
+  lines.push('=== CURRENT CONDITIONS ===')
+  lines.push(`Sky: ${wmoDesc(c?.weather_code)}`)
+  lines.push(`Temperature: ${r(c?.temperature_2m)}${tU} (feels like ${r(c?.apparent_temperature)}${tU})`)
+  lines.push(`Wind: ${r(c?.wind_speed_10m)} ${wU} from the ${windDir(c?.wind_direction_10m)}`)
+  lines.push(`Humidity: ${r(c?.relative_humidity_2m)}%`)
+  if (c?.surface_pressure != null) lines.push(`Pressure: ${r(c.surface_pressure)} hPa`)
+  if (c?.uv_index != null)         lines.push(`UV index: ${c.uv_index}`)
+  if (c?.precipitation != null)    lines.push(`Precipitation right now: ${r(c.precipitation, 2)} ${pU}`)
+
+  // ── Next 24 hours (hourly) ───────────────────────────────────────────────
+  if (h?.time?.length) {
+    const now = new Date()
+    const startIdx = Math.max(0, h.time.findIndex(t => new Date(t) >= now))
+    const end = Math.min(startIdx + 24, h.time.length)
+
+    lines.push('', '=== NEXT 24 HOURS (hourly) ===')
+    lines.push('Time   | Sky                   | Temp  | Precip% | Wind')
+
+    for (let i = startIdx; i < end; i++) {
+      const sky   = wmoDesc(h.weather_code?.[i]).padEnd(21)
+      const temp  = `${r(h.temperature_2m?.[i])}${tU}`.padEnd(5)
+      const prob  = String(h.precipitation_probability?.[i] ?? 0).padStart(3) + '%'
+      const wind  = `${r(h.wind_speed_10m?.[i])} ${wU}`
+      const label = (i === startIdx ? 'Now   ' : fmtHour(h.time[i]).padEnd(6))
+      lines.push(`${label} | ${sky} | ${temp} | ${prob}     | ${wind}`)
     }
   }
 
-  const rise = fmtTime(d?.sunrise?.[0])
-  const set = fmtTime(d?.sunset?.[0])
-  if (rise || set) {
-    lines.push('')
-    if (rise) lines.push(`Today's sunrise: ${rise}`)
-    if (set) lines.push(`Today's sunset: ${set}`)
+  // ── 7-day daily forecast ─────────────────────────────────────────────────
+  if (d?.time?.length) {
+    lines.push('', '=== 7-DAY DAILY FORECAST ===')
+
+    for (let i = 0; i < Math.min(7, d.time.length); i++) {
+      const day       = fmtDay(d.time[i])
+      const sky       = wmoDesc(d.weather_code?.[i])
+      const hi        = `${r(d.temperature_2m_max?.[i])}${tU}`
+      const lo        = `${r(d.temperature_2m_min?.[i])}${tU}`
+      const probMax   = d.precipitation_probability_max?.[i] ?? 0
+      const probMin   = d.precipitation_probability_min?.[i] ?? null
+      const precip    = d.precipitation_sum?.[i] ?? 0
+      const windMax   = d.wind_speed_10m_max?.[i]
+      const windMin   = d.wind_speed_10m_min?.[i]
+      const uvMax     = d.uv_index_max?.[i]
+      const rise      = fmtTime(d.sunrise?.[i])
+      const set       = fmtTime(d.sunset?.[i])
+
+      const parts = [`${day}: ${sky}`, `High ${hi} / Low ${lo}`]
+
+      if (probMax > 5) {
+        parts.push(probMin != null && probMin !== probMax
+          ? `${probMin}–${probMax}% rain chance`
+          : `${probMax}% rain chance`)
+      }
+      if (precip > 0) parts.push(`${r(precip, 2)} ${pU} expected`)
+
+      if (windMax != null) {
+        parts.push(windMin != null
+          ? `Wind ${r(windMin)}–${r(windMax)} ${wU}`
+          : `Wind up to ${r(windMax)} ${wU}`)
+      }
+
+      if (uvMax != null) parts.push(`UV max ${uvMax}`)
+      if (rise)          parts.push(`Sunrise ${rise}`)
+      if (set)           parts.push(`Sunset ${set}`)
+
+      lines.push(parts.join(' | '))
+    }
   }
 
   return lines.join('\n')
@@ -174,7 +220,6 @@ app.post('/api/weather-ai', async (req, res) => {
   }
 })
 
-// Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', model: MODEL, ollama: OLLAMA_URL })
 })

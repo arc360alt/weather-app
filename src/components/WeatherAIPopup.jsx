@@ -67,7 +67,8 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
           messages: apiMessages,
           weatherData: {
             current: weatherData?.current,
-            daily: weatherData?.daily,
+            hourly:  weatherData?.hourly,
+            daily:   weatherData?.daily,
             locationName,
             units,
           },
