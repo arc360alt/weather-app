@@ -6,7 +6,7 @@ app.use(cors({ origin: 'https://weather.arc360hub.com' }))
 app.use(express.json({ limit: '2mb' }))
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
-const MODEL = process.env.OLLAMA_MODEL || 'gemma3:1b-it-qat'
+const MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:0.5b'
 
 const WMO_CODES = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
