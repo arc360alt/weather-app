@@ -156,7 +156,7 @@ function RadarMini({ lat, lon, onOpenRadar, style }) {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    fetch('https://api.rainviewer.com/public/weather-maps.json')
+    fetch('https://stormcastapi.arc360hub.com/public/weather-maps.json')
       .then(r => r.json())
       .then(json => {
         const host = json.host
