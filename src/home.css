@@ -1444,7 +1444,7 @@ body:has(.hm-root),
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: #fbbf24;
+  background: #246cfb;
   border: none;
   color: #0d1829;
   cursor: pointer;
@@ -1455,7 +1455,7 @@ body:has(.hm-root),
   flex-shrink: 0;
 }
 .wai-send-btn:hover:not(:disabled) {
-  background: #f59e0b;
+  background: #246cfb;
   transform: scale(1.05);
 }
 .wai-send-btn:disabled {
