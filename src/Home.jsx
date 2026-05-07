@@ -3,7 +3,8 @@ import { useSettings } from './hooks/useSettings'
 import { useWeather } from './hooks/useWeather'
 import { useAlerts } from './hooks/useAlerts'
 import { WEATHER_CODES } from './config/defaults'
-import AlertModal from './components/AlertModal' 
+import AlertModal from './components/AlertModal'
+import WeatherAIPopup from './components/WeatherAIPopup'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -760,7 +761,8 @@ export default function Home({ onOpenRadar }) {
   const [searchError, setSearchError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [selectedAlert, setSelectedAlert] = useState(null) 
+  const [selectedAlert, setSelectedAlert] = useState(null)
+  const [aiOpen, setAiOpen] = useState(false)
 
   const handleSearch = async (e) => {
     e.preventDefault()
@@ -826,6 +828,17 @@ export default function Home({ onOpenRadar }) {
         <span className="hm-loc-caret">▾</span>
       </button>
       <div className="hm-topbar-right">
+        <button
+          className={`hm-icon-btn hm-ai-btn${aiOpen ? ' wai-active' : ''}`}
+          onClick={() => setAiOpen(o => !o)}
+          title="AI weather summary"
+          aria-label="Open AI weather assistant"
+          aria-expanded={aiOpen}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </button>
         <button className="hm-icon-btn" onClick={refresh} title="Refresh" aria-label="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -1029,7 +1042,14 @@ export default function Home({ onOpenRadar }) {
             </div>
           </div>
         </div>
-        
+
+      <WeatherAIPopup
+        weatherData={weatherData}
+        locationName={settings.locationName}
+        units={settings.units}
+        isOpen={aiOpen}
+        onClose={() => setAiOpen(false)}
+      />
       <AlertModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
     </div>
   )
@@ -1157,6 +1177,13 @@ export default function Home({ onOpenRadar }) {
         </button>
 
       </div>
+      <WeatherAIPopup
+        weatherData={weatherData}
+        locationName={settings.locationName}
+        units={settings.units}
+        isOpen={aiOpen}
+        onClose={() => setAiOpen(false)}
+      />
       <AlertModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
     </div>
   )
