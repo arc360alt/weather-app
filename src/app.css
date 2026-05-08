@@ -76,7 +76,8 @@ body {
 .weather-panel {
   height: 100%;
   width: 100%;
-  background: var(--bg-panel);
+  background: rgba(6, 13, 23, 0.82);
+  backdrop-filter: blur(10px);
   border-right: 1px solid var(--border);
   overflow-y: auto;
   overflow-x: hidden;
@@ -98,7 +99,7 @@ body {
 /* Header */
 .panel-header {
   padding: 28px 20px 20px;
-  background: linear-gradient(180deg, #0d1e33 0%, var(--bg-panel) 100%);
+  background: linear-gradient(180deg, #0b16234f 0%, #0B16234f 100%);
   border-bottom: 1px solid var(--border);
 }
 
@@ -149,12 +150,12 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  background: var(--border);
+  background: #1e30503f;
   border-bottom: 1px solid var(--border);
 }
 
 .stat-tile {
-  background: var(--bg-card);
+  background: #111d2e3f;
   padding: 12px 14px;
   display: flex;
   align-items: center;
