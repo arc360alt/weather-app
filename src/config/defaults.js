@@ -1,8 +1,8 @@
 // Default application configuration
 export const DEFAULT_SETTINGS = {
   // Location
-  lat: 41.88,
-  lon: 87.63,
+  lat: 41.8781,
+  lon: 87.6298,
   locationName: 'Chicago, IL',
 
   // Map appearance
@@ -64,32 +64,32 @@ export const WEATHER_PROVIDERS = [
   { label: 'OpenWeatherMap',            value: 'openweathermap' },
 ]
 
-// Weather code to human-readable description + icon mapping
+// Weather code to human-readable description + meteocon icon name mapping
 export const WEATHER_CODES = {
-  0:  { label: 'Clear Sky',         icon: '☀️' },
-  1:  { label: 'Mainly Clear',      icon: '🌤️' },
-  2:  { label: 'Partly Cloudy',     icon: '⛅' },
-  3:  { label: 'Overcast',          icon: '☁️' },
-  45: { label: 'Foggy',             icon: '🌫️' },
-  48: { label: 'Icy Fog',           icon: '🌫️' },
-  51: { label: 'Light Drizzle',     icon: '🌦️' },
-  53: { label: 'Drizzle',           icon: '🌦️' },
-  55: { label: 'Heavy Drizzle',     icon: '🌧️' },
-  61: { label: 'Light Rain',        icon: '🌧️' },
-  63: { label: 'Rain',              icon: '🌧️' },
-  65: { label: 'Heavy Rain',        icon: '🌧️' },
-  71: { label: 'Light Snow',        icon: '🌨️' },
-  73: { label: 'Snow',              icon: '❄️' },
-  75: { label: 'Heavy Snow',        icon: '❄️' },
-  77: { label: 'Snow Grains',       icon: '🌨️' },
-  80: { label: 'Light Showers',     icon: '🌦️' },
-  81: { label: 'Showers',           icon: '🌧️' },
-  82: { label: 'Heavy Showers',     icon: '⛈️' },
-  85: { label: 'Snow Showers',      icon: '🌨️' },
-  86: { label: 'Heavy Snow Showers',icon: '❄️' },
-  95: { label: 'Thunderstorm',      icon: '⛈️' },
-  96: { label: 'Thunderstorm + Hail',icon: '⛈️' },
-  99: { label: 'Heavy Thunderstorm',icon: '⛈️' },
+  0:  { label: 'Clear Sky',            icon: 'clear-day' },
+  1:  { label: 'Mainly Clear',         icon: 'mostly-clear-day' },
+  2:  { label: 'Partly Cloudy',        icon: 'partly-cloudy-day' },
+  3:  { label: 'Overcast',             icon: 'overcast' },
+  45: { label: 'Foggy',                icon: 'fog-day' },
+  48: { label: 'Icy Fog',              icon: 'fog-day' },
+  51: { label: 'Light Drizzle',        icon: 'drizzle' },
+  53: { label: 'Drizzle',              icon: 'drizzle' },
+  55: { label: 'Heavy Drizzle',        icon: 'overcast-drizzle' },
+  61: { label: 'Light Rain',           icon: 'partly-cloudy-day-rain' },
+  63: { label: 'Rain',                 icon: 'rain' },
+  65: { label: 'Heavy Rain',           icon: 'overcast-rain' },
+  71: { label: 'Light Snow',           icon: 'partly-cloudy-day-snow' },
+  73: { label: 'Snow',                 icon: 'snow' },
+  75: { label: 'Heavy Snow',           icon: 'overcast-snow' },
+  77: { label: 'Snow Grains',          icon: 'snow' },
+  80: { label: 'Light Showers',        icon: 'partly-cloudy-day-rain' },
+  81: { label: 'Showers',              icon: 'rain' },
+  82: { label: 'Heavy Showers',        icon: 'overcast-rain' },
+  85: { label: 'Snow Showers',         icon: 'partly-cloudy-day-snow' },
+  86: { label: 'Heavy Snow Showers',   icon: 'overcast-snow' },
+  95: { label: 'Thunderstorm',         icon: 'thunderstorms-day' },
+  96: { label: 'Thunderstorm + Hail',  icon: 'thunderstorms-day-hail' },
+  99: { label: 'Heavy Thunderstorm',   icon: 'thunderstorms-day' },
 }
 
 export const RADAR_PROVIDERS = [

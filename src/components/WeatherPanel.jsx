@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { WEATHER_CODES } from '../config/defaults'
 import { HourlyChart, WeeklyChart } from './Charts'
 import AlertBanner from './AlertBanner'
+import WeatherIcon from './WeatherIcon'
 
 function getWeatherInfo(code) {
-  return WEATHER_CODES[code] ?? { label: 'Unknown', icon: '🌡️' }
+  return WEATHER_CODES[code] ?? { label: 'Unknown', icon: 'thermometer' }
 }
 
 function windDir(deg) {
@@ -39,7 +40,7 @@ function resolvePrecipProb(max, min, mode) {
 function StatTile({ icon, label, value }) {
   return (
     <div className="stat-tile">
-      <span className="stat-icon">{icon}</span>
+      <div className="stat-icon">{icon}</div>
       <div>
         <div className="stat-label">{label}</div>
         <div className="stat-value">{value}</div>
@@ -54,8 +55,8 @@ function DailyRow({ day, code, high, low, precipChance, units }) {
   return (
     <div className="daily-row">
       <span className="daily-day">{day}</span>
-      <span className="daily-icon" title={label}>{icon}</span>
-      <span className="daily-precip">{precipChance}%💧</span>
+      <span className="daily-icon" title={label}><WeatherIcon name={icon} size={22} /></span>
+      <span className="daily-precip">{precipChance}%<WeatherIcon name="raindrop" size={14} /></span>
       <span className="daily-temps">
         <span className="daily-high">{Math.round(high)}{tempUnit}</span>
         <span className="daily-low">{Math.round(low)}{tempUnit}</span>
@@ -131,7 +132,7 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
           )}
         </div>
         <div className="current-main">
-          <span className="current-icon">{icon}</span>
+          <span className="current-icon"><WeatherIcon name={icon} size={56} /></span>
           <span className="current-temp">{Math.round(c.temperature_2m)}{tempUnit}</span>
         </div>
         <div className="current-description">{label}</div>
@@ -139,12 +140,12 @@ export default function WeatherPanel({ weatherData, loading, error, settings, lo
       </div>
 
       <div className="stat-grid">
-        <StatTile icon="💨" label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
-        <StatTile icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} />
+        <StatTile icon={<WeatherIcon name="wind"      size={20} />} label="Wind"     value={`${Math.round(c.wind_speed_10m)} ${windUnit} ${windDir(c.wind_direction_10m)}`} />
+        <StatTile icon={<WeatherIcon name="humidity"  size={20} />} label="Humidity" value={`${c.relative_humidity_2m}%`} />
         {c.surface_pressure != null && (
-          <StatTile icon="🌡️" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
+          <StatTile icon={<WeatherIcon name="barometer" size={20} />} label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} />
         )}
-        <StatTile icon="☀️" label="UV Index" value={uvIndex} />
+        <StatTile icon={<WeatherIcon name="uv-index"  size={20} />} label="UV Index" value={uvIndex} />
         {daily?.sunrise?.[0] && <StatTile icon="🌅" label="Sunrise" value={formatTime(daily.sunrise[0])} />}
         {daily?.sunset?.[0]  && <StatTile icon="🌇" label="Sunset"  value={formatTime(daily.sunset[0])} />}
       </div>

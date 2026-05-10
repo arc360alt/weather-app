@@ -240,7 +240,7 @@ body:has(.hm-root),
   min-width: 0;
 }
 
-.hm-big-icon { font-size: 52px; line-height: 1; margin-bottom: 4px; }
+.hm-big-icon { width: 72px; height: 72px; margin-bottom: 4px; }
 .hm-big-temp {
   font-size: 72px;
   font-weight: 700;
@@ -267,6 +267,11 @@ body:has(.hm-root),
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-sec);
+}
+.hm-hero-sub-stats span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ── Radar mini ─────────────────────────────────────────────────────────── */
@@ -336,6 +341,9 @@ body:has(.hm-root),
 }
 
 .hm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 11px;
   text-transform: uppercase;
@@ -383,13 +391,16 @@ body:has(.hm-root),
   color: var(--text-muted);
   text-transform: uppercase;
 }
-.hm-hourly-icon { font-size: 18px; }
+.hm-hourly-icon { width: 28px; height: 28px; }
 .hm-hourly-temp {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-pri);
 }
 .hm-hourly-precip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--sky);
@@ -409,7 +420,7 @@ body:has(.hm-root),
 .hm-daily-row:last-child { border-bottom: none; }
 
 .hm-daily-day { width: 48px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
-.hm-daily-icon { font-size: 18px; flex-shrink: 0; }
+.hm-daily-icon { width: 32px; height: 32px; flex-shrink: 0; }
 .hm-daily-precip {
   width: 42px;
   font-family: var(--font-mono);
@@ -504,7 +515,7 @@ body:has(.hm-root),
   gap: 8px;
 }
 
-.hm-sun-meta-icon { font-size: 18px; }
+.hm-sun-meta-icon { width: 20px; height: 20px; flex-shrink: 0; }
 
 .hm-sun-meta-label {
   font-family: var(--font-mono);
@@ -539,7 +550,7 @@ body:has(.hm-root),
   gap: 10px;
 }
 
-.hm-stat-icon { font-size: 20px; flex-shrink: 0; line-height: 1.2; }
+.hm-stat-icon { width: 22px; height: 22px; flex-shrink: 0; }
 .hm-stat-body { flex: 1; min-width: 0; }
 .hm-stat-label {
   font-family: var(--font-mono);
@@ -743,6 +754,9 @@ body:has(.hm-root),
 .hm-uv-text { font-size: 16px; font-weight: 600; }
 
 .hm-uv-tip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-sec);
@@ -867,7 +881,7 @@ body:has(.hm-root),
 
   .hm-hero-left { gap: 6px; }
 
-  .hm-big-icon  { font-size: 64px; }
+  .hm-big-icon  { width: 88px; height: 88px; }
   .hm-big-temp  { font-size: 96px; letter-spacing: -5px; }
   .hm-big-desc  { font-size: 20px; }
   .hm-big-feels { font-size: 13px; }
@@ -1473,4 +1487,209 @@ body:has(.hm-root),
     max-height: 58vh;
   }
   .wai-bubble { font-size: 12px; }
+}
+
+/* ── Pollen Section ──────────────────────────────────────────────────────── */
+
+.hm-pollen-na {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 4px 0 8px;
+}
+
+.hm-pollen-card {
+  padding: 4px 0 0;
+}
+
+.hm-pollen-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.hm-pollen-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.hm-pollen-type-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.hm-pollen-level-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+
+.hm-pollen-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-pri);
+}
+
+.hm-pollen-val span {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.hm-pollen-forecast {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.hm-pollen-day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.hm-pollen-day-name {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.hm-pollen-day-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.hm-pollen-day-level {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+/* ── Pollen + AQI desktop row ─────────────────────────────────────────────── */
+.hm-pollen-aqi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.hm-pollen-aqi-row > .hm-section:first-child {
+  border-right: 1px solid var(--border);
+}
+
+/* ── Air Quality card ──────────────────────────────────────────────────────── */
+.hm-aqi-card {
+  padding: 4px 0 0;
+}
+
+.hm-aqi-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.hm-aqi-number {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 52px;
+  text-align: right;
+}
+
+.hm-aqi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hm-aqi-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.hm-aqi-sublabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.hm-aqi-bar-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.hm-aqi-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.hm-aqi-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.hm-aqi-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.hm-aqi-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.hm-aqi-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hm-aqi-stat-key {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.hm-aqi-stat-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-pri);
 }

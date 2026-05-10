@@ -37,7 +37,8 @@ function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function buildSystemPrompt({ current: c, hourly: h, daily: d, locationName, units }) {
+
+function buildSystemPrompt({ current: c, hourly: h, daily: d, locationName, units, pollenData, aqData }) {
   const tU = units === 'imperial' ? '°F' : '°C'
   const wU = units === 'imperial' ? 'mph' : 'km/h'
   const pU = units === 'imperial' ? 'in' : 'mm'
@@ -60,6 +61,31 @@ function buildSystemPrompt({ current: c, hourly: h, daily: d, locationName, unit
   if (c?.surface_pressure != null) lines.push(`Pressure: ${r(c.surface_pressure)} hPa`)
   if (c?.uv_index != null)         lines.push(`UV index: ${c.uv_index}`)
   if (c?.precipitation != null)    lines.push(`Precipitation right now: ${c.precipitation} ${pU}`)
+
+  if (aqData?.aqi != null) {
+    lines.push('', '=== AIR QUALITY ===')
+    lines.push(`US AQI: ${aqData.aqi} (${aqData.label})`)
+    if (aqData.pm25 != null) lines.push(`PM2.5: ${Math.round(aqData.pm25)} µg/m³`)
+    if (aqData.pm10 != null) lines.push(`PM10:  ${Math.round(aqData.pm10)} µg/m³`)
+    if (aqData.no2  != null) lines.push(`NO₂:   ${Math.round(aqData.no2)} µg/m³`)
+    if (aqData.o3   != null) lines.push(`O₃:    ${Math.round(aqData.o3)} µg/m³`)
+  }
+
+  if (pollenData?.current) {
+    const { current, forecast } = pollenData
+    const cat = d => d?.indexInfo?.category ?? 'N/A'
+    const val = d => d?.indexInfo?.value != null ? ` (${d.indexInfo.value}/5)` : ''
+    lines.push('', '=== POLLEN CONDITIONS ===')
+    lines.push(`Tree pollen:  ${cat(current.tree)}${val(current.tree)}`)
+    lines.push(`Grass pollen: ${cat(current.grass)}${val(current.grass)}`)
+    if (forecast?.length > 1) {
+      lines.push('5-day pollen forecast:')
+      for (const { date, tree, grass } of forecast) {
+        const day = new Date(date + 'T12:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        lines.push(`  ${day}: Tree ${cat(tree)} / Grass ${cat(grass)}`)
+      }
+    }
+  }
 
   if (h?.time?.length) {
     const now = new Date()
@@ -101,7 +127,7 @@ function buildSystemPrompt({ current: c, hourly: h, daily: d, locationName, unit
   return lines.join('\n')
 }
 
-export default function WeatherAIPopup({ weatherData, locationName, units, isOpen, onClose }) {
+export default function WeatherAIPopup({ weatherData, pollenData, aqData, locationName, units, isOpen, onClose }) {
   const [chatMessages, setChatMessages] = useState([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -154,6 +180,8 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
       daily: weatherData?.daily,
       locationName,
       units,
+      pollenData,
+      aqData,
     })
 
     const contents = apiMessages.map(msg => ({
@@ -212,7 +240,7 @@ export default function WeatherAIPopup({ weatherData, locationName, units, isOpe
       setIsStreaming(false)
       setLiveText('')
     }
-  }, [weatherData, locationName, units, apiKey])
+  }, [weatherData, pollenData, aqData, locationName, units, apiKey])
 
   const runInit = useCallback(() => {
     const initMsg = { role: 'user', content: INIT_PROMPT }

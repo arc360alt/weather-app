@@ -2,14 +2,34 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettings } from './hooks/useSettings'
 import { useWeather } from './hooks/useWeather'
 import { useAlerts } from './hooks/useAlerts'
+import { usePollen } from './hooks/usePollen'
+import { useAirQuality, aqiInfo } from './hooks/useAirQuality'
 import { WEATHER_CODES } from './config/defaults'
 import AlertModal from './components/AlertModal'
 import WeatherAIPopup from './components/WeatherAIPopup'
+import WeatherIcon, { toNightIcon } from './components/WeatherIcon'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// Tiny inline icon for section titles and hero sub-stats
+function SI({ name, size = 20 }) {
+  return <WeatherIcon name={name} size={size} style={{ flexShrink: 0 }} />
+}
+
 function getWeatherInfo(code) {
-  return WEATHER_CODES[code] ?? { label: 'Unknown', icon: '🌡️' }
+  return WEATHER_CODES[code] ?? { label: 'Unknown', icon: 'thermometer' }
+}
+
+function isDaytime(isoString, daily) {
+  if (!daily?.sunrise || !daily?.sunset) return true
+  const t = new Date(isoString)
+  const dateStr = isoString.split('T')[0]
+  const dayIdx = daily.time.findIndex(d => d.split('T')[0] === dateStr)
+  if (dayIdx === -1) return true
+  const rise = daily.sunrise[dayIdx] ? new Date(daily.sunrise[dayIdx]) : null
+  const set  = daily.sunset[dayIdx]  ? new Date(daily.sunset[dayIdx])  : null
+  if (!rise || !set) return true
+  return t >= rise && t <= set
 }
 
 function windDir(deg) {
@@ -198,7 +218,7 @@ function RadarMini({ lat, lon, onOpenRadar, style }) {
 // FIND: the entire HourlyRow function
 // REPLACE WITH:
 
-function HourlyRow({ hourly, units }) {
+function HourlyRow({ hourly, units, daily }) {
   const { time, temperature_2m, precipitation_probability, weather_code } = hourly
   const tempUnit = units === 'imperial' ? '°F' : '°C'
   const now = new Date()
@@ -246,7 +266,8 @@ function HourlyRow({ hourly, units }) {
       onMouseLeave={onMouseUp}
     >
       {slice.map((t, i) => {
-        const { icon } = getWeatherInfo(codes[i])
+        const { icon: baseIcon } = getWeatherInfo(codes[i])
+        const icon = isDaytime(t, daily) ? baseIcon : toNightIcon(baseIcon)
         return (
           <div key={t} className="hm-hourly-item">
               <div className="hm-hourly-time">
@@ -265,9 +286,9 @@ function HourlyRow({ hourly, units }) {
                   return null
                 })()}
               </div>
-            <div className="hm-hourly-icon">{icon}</div>
+            <div className="hm-hourly-icon"><WeatherIcon name={icon} size={28} /></div>
             <div className="hm-hourly-temp">{Math.round(temps[i])}{tempUnit}</div>
-            {probs[i] > 10 && <div className="hm-hourly-precip">💧{probs[i]}%</div>}
+            {probs[i] > 10 && <div className="hm-hourly-precip"><SI name="raindrop" size={10}/>{probs[i]}%</div>}
           </div>
         )
       })}
@@ -306,8 +327,8 @@ function DailyForecast({ daily, units, isDesktop }) {
         return (
           <div key={t} className="hm-daily-row">
             <div className="hm-daily-day">{formatDayShort(t)}</div>
-            <div className="hm-daily-icon">{icon}</div>
-            {prob > 10 ? <div className="hm-daily-precip">💧{prob}%</div> : <div className="hm-daily-precip" />}
+            <div className="hm-daily-icon"><WeatherIcon name={icon} size={32} /></div>
+            {prob > 10 ? <div className="hm-daily-precip"><SI name="raindrop" size={12}/>{prob}%</div> : <div className="hm-daily-precip" />}
             <div className="hm-daily-temps">
               <span className="hm-daily-lo">{lo}{tempUnit}</span>
               <div className="hm-daily-bar-track">
@@ -324,7 +345,7 @@ function DailyForecast({ daily, units, isDesktop }) {
   if (isDesktop) {
     return (
       <div className="hm-section" style={{ borderBottom: 'none' }}>
-        <div className="hm-section-title">📅 7-Day Forecast</div>
+        <div className="hm-section-title"><SI name="cloudy" />7-Day Forecast</div>
         {inner}
       </div>
     )
@@ -332,7 +353,7 @@ function DailyForecast({ daily, units, isDesktop }) {
 
   return (
     <div className="hm-section">
-      <div className="hm-section-title">📅 7-Day Forecast</div>
+      <div className="hm-section-title"><SI name="cloudy" />7-Day Forecast</div>
       {inner}
     </div>
   )
@@ -455,14 +476,14 @@ function SunMoonBlock({ daily }) {
 
       <div className="hm-sun-meta">
         <div className="hm-sun-meta-item">
-          <span className="hm-sun-meta-icon">🌅</span>
+          <span className="hm-sun-meta-icon"><WeatherIcon name="sunrise" size={20} /></span>
           <div>
             <div className="hm-sun-meta-label">Sunrise</div>
             <div className="hm-sun-meta-val">{formatTime(rise)}</div>
           </div>
         </div>
         <div className="hm-sun-meta-item">
-          <span className="hm-sun-meta-icon">🌇</span>
+          <span className="hm-sun-meta-icon"><WeatherIcon name="sunset" size={20} /></span>
           <div>
             <div className="hm-sun-meta-label">Sunset</div>
             <div className="hm-sun-meta-val">{formatTime(set)}</div>
@@ -470,7 +491,7 @@ function SunMoonBlock({ daily }) {
         </div>
         {dayLen != null && (
           <div className="hm-sun-meta-item">
-            <span className="hm-sun-meta-icon">⏱</span>
+            <span className="hm-sun-meta-icon"><WeatherIcon name="time-afternoon" size={20} /></span>
             <div>
               <div className="hm-sun-meta-label">Daylight</div>
               <div className="hm-sun-meta-val">{Math.floor(dayLen/60)}h {dayLen%60}m</div>
@@ -559,14 +580,130 @@ function UvSection({ uv }) {
         <span className="hm-uv-num">{uv}</span>
         <span className="hm-uv-text">{uvLabel(uv)}</span>
       </div>
-      {uv <= 2 && <div className="hm-uv-tip">☀️ Low risk, enjoy the sun</div>}
-      {uv > 2 && uv <= 5 && <div className="hm-uv-tip">☀️ Wear sunscreen and sunglasses</div>}
-      {uv > 5 && uv <= 7 && <div className="hm-uv-tip">☀️ Wear sunscreen and sunglasses, seek shade when necessary</div>}
-      {uv > 7 && uv <= 10 && <div className="hm-uv-tip">🕶 Seek shade during midday hours</div>}
-      {uv > 10 && <div className="hm-uv-tip">☠️ Extreme UV, take all precautions</div>}
+      {uv <= 2 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Low risk, enjoy the sun</div>}
+      {uv > 2 && uv <= 5 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Wear sunscreen and sunglasses</div>}
+      {uv > 5 && uv <= 7 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Wear sunscreen and sunglasses, seek shade when necessary</div>}
+      {uv > 7 && uv <= 10 && <div className="hm-uv-tip"><SI name="uv-index-alert" size={14}/> Seek shade during midday hours</div>}
+      {uv > 10 && <div className="hm-uv-tip"><SI name="uv-index-alert" size={14}/> Extreme UV, take all precautions</div>}
     </div>
   )
 }
+
+// ── Pollen Section ─────────────────────────────────────────────────────────
+
+function pollenCategoryColor(category) {
+  switch (category) {
+    case 'None':      return '#6b8db5'
+    case 'Very Low':  return '#22c55e'
+    case 'Low':       return '#84cc16'
+    case 'Moderate':  return '#eab308'
+    case 'High':      return '#f97316'
+    case 'Very High': return '#ef4444'
+    default:          return '#6b8db5'
+  }
+}
+
+function PollenSection({ pollenData, hasKey }) {
+  if (!hasKey) {
+    return <div className="hm-pollen-na">Add a Google API key in Settings → API Keys to enable pollen data.</div>
+  }
+  if (!pollenData?.current) {
+    return <div className="hm-pollen-na">Loading pollen data…</div>
+  }
+  const { current, forecast } = pollenData
+  return (
+    <div className="hm-pollen-card">
+      <div className="hm-pollen-types">
+        {[
+          { label: 'Tree',  d: current.tree },
+          { label: 'Grass', d: current.grass },
+        ].map(({ label, d }) => {
+          const category = d?.indexInfo?.category ?? 'N/A'
+          const value    = d?.indexInfo?.value
+          const color    = pollenCategoryColor(category)
+          return (
+            <div key={label} className="hm-pollen-type">
+              <div className="hm-pollen-type-name">{label}</div>
+              <div className="hm-pollen-level-badge" style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>{category}</div>
+              {value != null && <div className="hm-pollen-val">{value}<span>/5</span></div>}
+            </div>
+          )
+        })}
+      </div>
+      {forecast?.length > 0 && (
+        <div className="hm-pollen-forecast">
+          {forecast.map(({ date, tree, grass }) => {
+            const vals   = [tree, grass].map(d => d?.indexInfo?.value ?? 0)
+            const maxIdx = vals.indexOf(Math.max(...vals))
+            const maxCat = [tree, grass][maxIdx]?.indexInfo?.category ?? 'None'
+            const color  = pollenCategoryColor(maxCat)
+            return (
+              <div key={date} className="hm-pollen-day">
+                <div className="hm-pollen-day-name">{formatDayShort(date + 'T12:00')}</div>
+                <div className="hm-pollen-day-dot" style={{ background: color }} />
+                <div className="hm-pollen-day-level" style={{ color }}>{maxCat}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const PollenIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7 }}>
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+  </svg>
+)
+
+const hasAqKey = !!import.meta.env.VITE_GOOGLE_POLLEN_KEY
+
+function AirQualitySection({ aqData }) {
+  if (!hasAqKey) return <div className="hm-pollen-na">Add VITE_GOOGLE_POLLEN_KEY to .env to enable air quality data.</div>
+  if (!aqData) return <div className="hm-pollen-na">Loading air quality…</div>
+  const { aqi, label, color, pm25, pm10, no2, o3 } = aqData
+  const stats = [
+    { key: 'PM2.5', val: pm25 != null ? `${Math.round(pm25)} µg/m³` : '—' },
+    { key: 'PM10',  val: pm10 != null ? `${Math.round(pm10)} µg/m³` : '—' },
+    { key: 'NO₂',  val: no2  != null ? `${Math.round(no2)} µg/m³`  : '—' },
+    { key: 'O₃',   val: o3   != null ? `${Math.round(o3)} µg/m³`   : '—' },
+  ]
+  return (
+    <div className="hm-aqi-card">
+      <div className="hm-aqi-main">
+        <div className="hm-aqi-number" style={{ color }}>{aqi ?? '—'}</div>
+        <div className="hm-aqi-info">
+          <div className="hm-aqi-label" style={{ color }}>{label}</div>
+          <div className="hm-aqi-sublabel">US AQI</div>
+        </div>
+        <div className="hm-aqi-bar-wrap">
+          <div className="hm-aqi-bar">
+            <div className="hm-aqi-bar-fill" style={{ width: `${Math.min(100, ((aqi ?? 0) / 300) * 100)}%`, background: color }} />
+          </div>
+          <div className="hm-aqi-scale"><span>Good</span><span>Moderate</span><span>Unhealthy</span><span>Hazardous</span></div>
+        </div>
+      </div>
+      <div className="hm-aqi-stats">
+        {stats.map(({ key, val }) => (
+          <div key={key} className="hm-aqi-stat">
+            <div className="hm-aqi-stat-key">{key}</div>
+            <div className="hm-aqi-stat-val">{val}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const AqiIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7 }}>
+    <path d="M8 16H3a1 1 0 0 1 0-2h5a2 2 0 0 0 0-4H3"/>
+    <path d="M12 8H9a1 1 0 0 0 0 2h3a2 2 0 0 1 0 4H3"/>
+    <path d="M17 12h-1a2 2 0 0 0 0 4h1a2 2 0 0 0 0-4z"/>
+  </svg>
+)
 
 // ── NWS-Specific Stats ─────────────────────────────────────────────────────
 
@@ -585,11 +722,11 @@ function NwsExtras({ weatherData, units }) {
 
   return (
     <div className="hm-section">
-      <div className="hm-section-title">📊 Next 24h Range</div>
+      <div className="hm-section-title"><SI name="thermometer" />Next 24h Range</div>
       <div className="hm-stat-grid">
-        <StatCard icon="🌡️" label="24h High" value={`${Math.round(maxT)}${tempUnit}`} sub="Daytime peak" />
-        <StatCard icon="🌡️" label="24h Low"  value={`${Math.round(minT)}${tempUnit}`} sub="Overnight low" />
-        <StatCard icon="💨" label="Peak Wind" value={`${Math.round(maxW)} ${windUnit}`} sub="Max gusts expected" />
+        <StatCard icon={<SI name="thermometer-sun" size={22}/>} label="24h High" value={`${Math.round(maxT)}${tempUnit}`} sub="Daytime peak" />
+        <StatCard icon={<SI name="thermometer-raindrop" size={22}/>} label="24h Low"  value={`${Math.round(minT)}${tempUnit}`} sub="Overnight low" />
+        <StatCard icon={<SI name="wind-alert" size={22}/>} label="Peak Wind" value={`${Math.round(maxW)} ${windUnit}`} sub="Max gusts expected" />
       </div>
     </div>
   )
@@ -814,9 +951,13 @@ export default function Home({ onOpenRadar }) {
   const c        = weatherData?.current
   const daily    = weatherData?.daily
   const hourly   = weatherData?.hourly
-  const { icon, label } = c ? getWeatherInfo(c.weather_code) : { icon: '🌡️', label: '' }
+  const { icon: rawIcon, label } = c ? getWeatherInfo(c.weather_code) : { icon: 'thermometer', label: '' }
+  const icon = c && daily ? (isDaytime(new Date().toISOString(), daily) ? rawIcon : toNightIcon(rawIcon)) : rawIcon
   const isNws    = settings.weatherProvider === 'nws'
-  const uv       = daily?.uv_index_max?.[0] ?? null
+  const uv        = daily?.uv_index_max?.[0] ?? null
+  const pollenData   = usePollen(settings.lat, settings.lon)
+  const hasPollenKey = !!import.meta.env.VITE_GOOGLE_POLLEN_KEY
+  const aqData       = useAirQuality(settings.lat, settings.lon)
 
   // ── Shared top bar & search (identical on both layouts) ──────────────────
 
@@ -925,14 +1066,14 @@ export default function Home({ onOpenRadar }) {
             {/* Hero: big temp + conditions */}
             <div className="hm-hero">
               <div className="hm-hero-left">
-                <div className="hm-big-icon">{icon}</div>
+                <div className="hm-big-icon"><WeatherIcon name={icon} size={88} /></div>
                 <div className="hm-big-temp">{Math.round(c.temperature_2m)}{tempUnit}</div>
                 <div className="hm-big-desc">{label}</div>
                 <div className="hm-big-feels">Feels like {Math.round(c.apparent_temperature)}{tempUnit}</div>
                 <div className="hm-hero-sub-stats">
-                  <span>💨 {Math.round(c.wind_speed_10m)} {windUnit} {windDir(c.wind_direction_10m)}</span>
-                  <span>💧 {c.relative_humidity_2m}%</span>
-                  {c.surface_pressure && <span>🌡 {Math.round(c.surface_pressure)} hPa</span>}
+                  <span><SI name="wind" size={14}/> {Math.round(c.wind_speed_10m)} {windUnit} {windDir(c.wind_direction_10m)}</span>
+                  <span><SI name="humidity" size={14}/> {c.relative_humidity_2m}%</span>
+                  {c.surface_pressure && <span><SI name="barometer" size={14}/> {Math.round(c.surface_pressure)} hPa</span>}
                 </div>
               </div>
 
@@ -943,28 +1084,28 @@ export default function Home({ onOpenRadar }) {
             {/* Sun & Daylight */}
             {daily && (
               <div className="hm-section">
-                <div className="hm-section-title">☀️ Sun &amp; Daylight</div>
+                <div className="hm-section-title"><SI name="sunrise" />Sun &amp; Daylight</div>
                 <SunMoonBlock daily={daily} />
               </div>
             )}
 
             {/* Key stat cards */}
             <div className="hm-section">
-              <div className="hm-section-title">📊 Current Conditions</div>
+              <div className="hm-section-title"><SI name="thermometer" />Current Conditions</div>
               <div className="hm-stat-grid">
-                <StatCard icon="💨" label="Wind" value={`${Math.round(c.wind_speed_10m)} ${windUnit}`} sub={windDir(c.wind_direction_10m)} accent="#38bdf8" />
-                <StatCard icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} sub={humidityLabel(c.relative_humidity_2m)} accent="#7dd3fc" />
+                <StatCard icon={<SI name="wind" size={22}/>} label="Wind"value={`${Math.round(c.wind_speed_10m)} ${windUnit}`} sub={windDir(c.wind_direction_10m)} accent="#38bdf8" />
+                <StatCard icon={<SI name="humidity" size={22}/>} label="Humidity" value={`${c.relative_humidity_2m}%`} sub={humidityLabel(c.relative_humidity_2m)} accent="#7dd3fc" />
                 {c.surface_pressure != null && (
-                  <StatCard icon="🧭" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} sub={pressureTrend(c.surface_pressure)} accent="#a78bfa" />
+                  <StatCard icon={<SI name="barometer" size={22}/>} label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} sub={pressureTrend(c.surface_pressure)} accent="#a78bfa" />
                 )}
                 {uv != null && (
-                  <StatCard icon="🌤" label="UV Index" value={String(uv)} sub={uvLabel(uv)} subColor={uvColor(uv)} accent={uvColor(uv)} />
+                  <StatCard icon={<SI name="uv-index" size={22}/>} label="UV Index" value={String(uv)} sub={uvLabel(uv)} subColor={uvColor(uv)} accent={uvColor(uv)} />
                 )}
                 {daily?.precipitation_sum?.[0] != null && (
-                  <StatCard icon="🌧" label="Precip Today" value={`${daily.precipitation_sum[0] ?? 0} ${settings.units === 'imperial' ? 'in' : 'mm'}`} sub="Accumulated" accent="#38bdf8" />
+                  <StatCard icon={<SI name="raindrop-measure" size={22}/>} label="Precip Today" value={`${daily.precipitation_sum[0] ?? 0} ${settings.units === 'imperial' ? 'in' : 'mm'}`} sub="Accumulated" accent="#38bdf8" />
                 )}
                 {daily?.wind_speed_10m_max?.[0] != null && (
-                  <StatCard icon="💨" label="Wind Max" value={`${Math.round(daily.wind_speed_10m_max[0])} ${windUnit}`} sub="Today's peak" accent="#f97316" />
+                  <StatCard icon={<SI name="wind-alert" size={22}/>} label="Wind Max" value={`${Math.round(daily.wind_speed_10m_max[0])} ${windUnit}`} sub="Today's peak" accent="#f97316" />
                 )}
               </div>
             </div>
@@ -972,11 +1113,6 @@ export default function Home({ onOpenRadar }) {
             {/* NWS extras */}
             {isNws && hourly && <NwsExtras weatherData={weatherData} units={settings.units} />}
 
-            {/* Bottom provider strip */}
-            <div className="hm-bottom-bar" style={{ marginTop: 'auto' }}>
-              <span>{isNws ? '📡 National Weather Service' : '🌍 Open-Meteo'}</span>
-              <span>{settings.units === 'imperial' ? '°F · mph · in' : '°C · km/h · mm'}</span>
-            </div>
           </div>
 
           {/* ── Right Main Panel ────────────────────────────────────────── */}
@@ -986,8 +1122,8 @@ export default function Home({ onOpenRadar }) {
             <div className="hm-desktop-top-grid">
               {hourly && (
                 <div className="hm-section">
-                  <div className="hm-section-title">⏱ Hourly Forecast</div>
-                  <HourlyRow hourly={hourly} units={settings.units} />
+                  <div className="hm-section-title"><SI name="time-afternoon" />Hourly Forecast</div>
+                  <HourlyRow hourly={hourly} units={settings.units} daily={daily} />
                 </div>
               )}
               {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={true} />}
@@ -996,18 +1132,18 @@ export default function Home({ onOpenRadar }) {
             {/* Mid grid: wind + UV + rain chance */}
             <div className="hm-desktop-mid-grid">
               <div className="hm-section">
-                <div className="hm-section-title">🧭 Wind Details</div>
+                <div className="hm-section-title"><SI name="compass" />Wind Details</div>
                 <WindSection c={c} daily={daily} windUnit={windUnit} />
               </div>
 
               <div className="hm-section">
-                <div className="hm-section-title">🌤 UV Index</div>
+                <div className="hm-section-title"><SI name="uv-index" />UV Index</div>
                 <UvSection uv={uv} />
               </div>
 
               {daily?.precipitation_probability_max && (
                 <div className="hm-section">
-                  <div className="hm-section-title">🌧 Rain Chance — 7 Days</div>
+                  <div className="hm-section-title"><SI name="raindrop" />Rain Chance — 7 Days</div>
                   <div className="hm-precip-bars">
                     {daily.time.slice(0, 7).map((t, i) => (
                       <PrecipBar
@@ -1022,23 +1158,35 @@ export default function Home({ onOpenRadar }) {
                 </div>
               )}
             </div>
+            {/* Pollen + Air Quality side by side */}
+            <div className="hm-pollen-aqi-row">
+              <div className="hm-section">
+                <div className="hm-section-title"><PollenIcon />Pollen</div>
+                <PollenSection pollenData={pollenData} hasKey={hasPollenKey} />
+              </div>
+              <div className="hm-section">
+                <div className="hm-section-title"><AqiIcon />Air Quality</div>
+                <AirQualitySection aqData={aqData} />
+              </div>
+            </div>
+
             {/* Bottom detail grid: Feels Like + Visibility + Dew Point + more */}
             <div className="hm-desktop-bottom-grid">
               {/* Feels Like Detail */}
               <div className="hm-section">
-                <div className="hm-section-title">🌡 Feels Like</div>
+                <div className="hm-section-title"><SI name="thermometer-sun" />Feels Like</div>
                 <FeelsLikeSection c={c} tempUnit={tempUnit} />
               </div>
 
               {/* Dew Point & Comfort */}
               <div className="hm-section">
-                <div className="hm-section-title">💧 Dew Point</div>
+                <div className="hm-section-title"><SI name="humidity" />Dew Point</div>
                 <DewPointSection c={c} tempUnit={tempUnit} />
               </div>
 
               {/* Pressure Trend */}
               <div className="hm-section">
-                <div className="hm-section-title">🧭 Pressure Detail</div>
+                <div className="hm-section-title"><SI name="barometer" />Pressure Detail</div>
                 <PressureSection c={c} hourly={hourly} />
               </div>
             </div>
@@ -1047,6 +1195,8 @@ export default function Home({ onOpenRadar }) {
 
       <WeatherAIPopup
         weatherData={weatherData}
+        pollenData={pollenData}
+        aqData={aqData}
         locationName={settings.locationName}
         units={settings.units}
         isOpen={aiOpen}
@@ -1072,14 +1222,14 @@ export default function Home({ onOpenRadar }) {
         {/* Hero */}
         <div className="hm-hero">
           <div className="hm-hero-left">
-            <div className="hm-big-icon">{icon}</div>
+            <div className="hm-big-icon"><WeatherIcon name={icon} size={72} /></div>
             <div className="hm-big-temp">{Math.round(c.temperature_2m)}{tempUnit}</div>
             <div className="hm-big-desc">{label}</div>
             <div className="hm-big-feels">Feels like {Math.round(c.apparent_temperature)}{tempUnit}</div>
             <div className="hm-hero-sub-stats">
-              <span>💨 {Math.round(c.wind_speed_10m)} {windUnit} {windDir(c.wind_direction_10m)}</span>
-              <span>💧 {c.relative_humidity_2m}%</span>
-              {c.surface_pressure && <span>🌡 {Math.round(c.surface_pressure)} hPa</span>}
+              <span><SI name="wind" size={14}/> {Math.round(c.wind_speed_10m)} {windUnit} {windDir(c.wind_direction_10m)}</span>
+              <span><SI name="humidity" size={14}/> {c.relative_humidity_2m}%</span>
+              {c.surface_pressure && <span><SI name="barometer" size={14}/> {Math.round(c.surface_pressure)} hPa</span>}
             </div>
           </div>
           <RadarMini lat={settings.lat} lon={settings.lon} onOpenRadar={onOpenRadar} />
@@ -1087,8 +1237,8 @@ export default function Home({ onOpenRadar }) {
 
         {hourly && (
           <div className="hm-section">
-            <div className="hm-section-title">⏱ Hourly Forecast</div>
-            <HourlyRow hourly={hourly} units={settings.units} />
+            <div className="hm-section-title"><SI name="time-afternoon" />Hourly Forecast</div>
+            <HourlyRow hourly={hourly} units={settings.units} daily={daily} />
           </div>
         )}
 
@@ -1096,34 +1246,34 @@ export default function Home({ onOpenRadar }) {
 
         {daily && (
           <div className="hm-section">
-            <div className="hm-section-title">☀️ Sun &amp; Daylight</div>
+            <div className="hm-section-title"><SI name="sunrise" />Sun &amp; Daylight</div>
             <SunMoonBlock daily={daily} />
           </div>
         )}
 
         <div className="hm-section">
-          <div className="hm-section-title">📊 Current Conditions</div>
+          <div className="hm-section-title"><SI name="thermometer" />Current Conditions</div>
           <div className="hm-stat-grid">
-            <StatCard icon="💨" label="Wind" value={`${Math.round(c.wind_speed_10m)} ${windUnit}`} sub={`${windDir(c.wind_direction_10m)} · ${windDir(c.wind_direction_10m)}`} accent="#38bdf8" />
-            <StatCard icon="💧" label="Humidity" value={`${c.relative_humidity_2m}%`} sub={humidityLabel(c.relative_humidity_2m)} accent="#7dd3fc" />
+            <StatCard icon={<SI name="wind" size={22}/>} label="Wind"value={`${Math.round(c.wind_speed_10m)} ${windUnit}`} sub={`${windDir(c.wind_direction_10m)} · ${windDir(c.wind_direction_10m)}`} accent="#38bdf8" />
+            <StatCard icon={<SI name="humidity" size={22}/>} label="Humidity" value={`${c.relative_humidity_2m}%`} sub={humidityLabel(c.relative_humidity_2m)} accent="#7dd3fc" />
             {c.surface_pressure != null && (
-              <StatCard icon="🧭" label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} sub={pressureTrend(c.surface_pressure)} accent="#a78bfa" />
+              <StatCard icon={<SI name="barometer" size={22}/>} label="Pressure" value={`${Math.round(c.surface_pressure)} hPa`} sub={pressureTrend(c.surface_pressure)} accent="#a78bfa" />
             )}
             {uv != null && (
-              <StatCard icon="🌤" label="UV Index" value={String(uv)} sub={uvLabel(uv)} subColor={uvColor(uv)} accent={uvColor(uv)} />
+              <StatCard icon={<SI name="uv-index" size={22}/>} label="UV Index" value={String(uv)} sub={uvLabel(uv)} subColor={uvColor(uv)} accent={uvColor(uv)} />
             )}
             {daily?.precipitation_sum?.[0] != null && (
-              <StatCard icon="🌧" label="Precip Today" value={`${daily.precipitation_sum[0] ?? 0} ${settings.units === 'imperial' ? 'in' : 'mm'}`} sub="Accumulated" accent="#38bdf8" />
+              <StatCard icon={<SI name="raindrop-measure" size={22}/>} label="Precip Today" value={`${daily.precipitation_sum[0] ?? 0} ${settings.units === 'imperial' ? 'in' : 'mm'}`} sub="Accumulated" accent="#38bdf8" />
             )}
             {daily?.wind_speed_10m_max?.[0] != null && (
-              <StatCard icon="💨" label="Wind Max" value={`${Math.round(daily.wind_speed_10m_max[0])} ${windUnit}`} sub="Today's peak" accent="#f97316" />
+              <StatCard icon={<SI name="wind-alert" size={22}/>} label="Wind Max" value={`${Math.round(daily.wind_speed_10m_max[0])} ${windUnit}`} sub="Today's peak" accent="#f97316" />
             )}
           </div>
         </div>
 
         {daily?.precipitation_probability_max && (
           <div className="hm-section">
-            <div className="hm-section-title">🌧 Rain Chance — Next 7 Days</div>
+            <div className="hm-section-title"><SI name="raindrop" />Rain Chance — Next 7 Days</div>
             <div className="hm-precip-bars">
               {daily.time.slice(0, 7).map((t, i) => (
                 <PrecipBar
@@ -1139,32 +1289,42 @@ export default function Home({ onOpenRadar }) {
         )}
 
         <div className="hm-section">
-          <div className="hm-section-title">🧭 Wind Details</div>
+          <div className="hm-section-title"><SI name="compass" />Wind Details</div>
           <WindSection c={c} daily={daily} windUnit={windUnit} />
         </div>
 
         {isNws && hourly && <NwsExtras weatherData={weatherData} units={settings.units} />}
                 <div className="hm-section">
-          <div className="hm-section-title">🌡 Feels Like</div>
+          <div className="hm-section-title"><SI name="thermometer-sun" />Feels Like</div>
           <FeelsLikeSection c={c} tempUnit={tempUnit} />
         </div>
 
         <div className="hm-section">
-          <div className="hm-section-title">💧 Dew Point</div>
+          <div className="hm-section-title"><SI name="humidity" />Dew Point</div>
           <DewPointSection c={c} tempUnit={tempUnit} />
         </div>
 
         <div className="hm-section">
-          <div className="hm-section-title">🧭 Pressure Detail</div>
+          <div className="hm-section-title"><SI name="barometer" />Pressure Detail</div>
           <PressureSection c={c} hourly={hourly} />
         </div>
 
         {uv != null && (
           <div className="hm-section">
-            <div className="hm-section-title">🌤 UV Index</div>
+            <div className="hm-section-title"><SI name="uv-index" />UV Index</div>
             <UvSection uv={uv} />
           </div>
         )}
+
+        <div className="hm-section">
+          <div className="hm-section-title"><PollenIcon />Pollen</div>
+          <PollenSection pollenData={pollenData} hasKey={hasPollenKey} />
+        </div>
+
+        <div className="hm-section">
+          <div className="hm-section-title"><AqiIcon />Air Quality</div>
+          <AirQualitySection aqData={aqData} />
+        </div>
 
         <div className="hm-bottom-bar">
           <span>{isNws ? '📡 National Weather Service' : '🌍 Open-Meteo'}</span>
@@ -1181,6 +1341,8 @@ export default function Home({ onOpenRadar }) {
       </div>
       <WeatherAIPopup
         weatherData={weatherData}
+        pollenData={pollenData}
+        aqData={aqData}
         locationName={settings.locationName}
         units={settings.units}
         isOpen={aiOpen}

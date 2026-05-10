@@ -419,7 +419,7 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             </Row>
           </section>
 
-          <section className="settings-section settings-footer-actions">
+<section className="settings-section settings-footer-actions">
             <button onClick={onReset} className="reset-btn">
               ↺ Reset to Defaults
             </button>
