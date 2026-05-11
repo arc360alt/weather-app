@@ -1331,11 +1331,13 @@ export default function Home({ onOpenRadar }) {
           <span>{settings.units === 'imperial' ? '°F · mph · in' : '°C · km/h · mm'}</span>
         </div>
 
-        <button className="hm-open-radar-cta" onClick={onOpenRadar}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M20.07 3.93a10 10 0 0 1 0 16.14M3.93 20.07a10 10 0 0 1 0-16.14"/>
+        <button className="hm-open-radar-cta" onClick={() => { window.history.pushState({}, '', '/download'); window.dispatchEvent(new PopStateEvent('popstate')) }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Open Full Radar Experience
+          Download Android App
         </button>
 
       </div>

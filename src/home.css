@@ -975,6 +975,11 @@ body:has(.hm-root),
   .hm-open-radar-cta { display: none; }
 }
 
+/* Push content above the fixed mobile nav bar */
+@media (max-width: 1328px) {
+  .hm-root { padding-bottom: 72px; }
+}
+
 /* ── Responsive tweaks ──────────────────────────────────────────────────── */
 
 @media (max-width: 380px) {

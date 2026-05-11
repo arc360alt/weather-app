@@ -841,11 +841,14 @@ body {
 
 /* ── Home Page ──────────────────────────────────────────────────────────────── */
 
-/* Override root overflow for home page scrolling */
+/* Override root overflow for home + download page scrolling */
 .home-root ~ * {}
 html:has(.home-root),
 body:has(.home-root),
-#root:has(.home-root) {
+#root:has(.home-root),
+html:has(.dl-page),
+body:has(.dl-page),
+#root:has(.dl-page) {
   overflow: auto;
 }
 

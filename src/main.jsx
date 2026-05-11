@@ -1,15 +1,17 @@
 import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import Home      from './Home.jsx'
-import App       from './App.jsx'
-import MobileNav from './components/MobileNav.jsx'
+import Home         from './Home.jsx'
+import App          from './App.jsx'
+import MobileNav    from './components/MobileNav.jsx'
+import DownloadPage from './pages/DownloadPage.jsx'
 import './app.css'
 import './home.css'
 
 function Root() {
   const getRoute = () => {
     const path = window.location.pathname
-    if (path === '/radar' || path === '/radar/') return 'radar'
+    if (path === '/radar'    || path === '/radar/')    return 'radar'
+    if (path === '/download' || path === '/download/') return 'download'
     return 'home'
   }
 
@@ -29,6 +31,10 @@ function Root() {
   const handleNavigate = (dest) => {
     if (dest === 'home')  goTo('/')
     if (dest === 'radar') goTo('/radar')
+  }
+
+  if (route === 'download') {
+    return <DownloadPage onBack={() => goTo('/')} />
   }
 
   return (
