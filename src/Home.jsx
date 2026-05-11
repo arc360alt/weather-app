@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSettings } from './hooks/useSettings'
 import { useWeather } from './hooks/useWeather'
 import { useAlerts } from './hooks/useAlerts'
@@ -228,43 +228,8 @@ function HourlyRow({ hourly, units, daily }) {
   const probs = precipitation_probability.slice(startIdx, startIdx + 24)
   const codes = weather_code.slice(startIdx, startIdx + 24)
 
-  const scrollRef = useRef(null)
-  const isDragging = useRef(false)
-  const startX = useRef(0)
-  const scrollLeft = useRef(0)
-
-  const onMouseDown = (e) => {
-    isDragging.current = true
-    startX.current = e.pageX - scrollRef.current.offsetLeft
-    scrollLeft.current = scrollRef.current.scrollLeft
-    scrollRef.current.style.cursor = 'grabbing'
-    scrollRef.current.style.userSelect = 'none'
-  }
-
-  const onMouseMove = (e) => {
-    if (!isDragging.current) return
-    e.preventDefault()
-    const x = e.pageX - scrollRef.current.offsetLeft
-    const walk = (x - startX.current) * 1.2
-    scrollRef.current.scrollLeft = scrollLeft.current - walk
-  }
-
-  const onMouseUp = () => {
-    isDragging.current = false
-    scrollRef.current.style.cursor = 'grab'
-    scrollRef.current.style.userSelect = ''
-  }
-
   return (
-    <div
-      ref={scrollRef}
-      className="hm-hourly-scroll"
-      style={{ cursor: 'grab' }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-    >
+    <div className="hm-hourly-scroll">
       {slice.map((t, i) => {
         const { icon: baseIcon } = getWeatherInfo(codes[i])
         const icon = isDaytime(t, daily) ? baseIcon : toNightIcon(baseIcon)
@@ -1118,29 +1083,31 @@ export default function Home({ onOpenRadar }) {
           {/* ── Right Main Panel ────────────────────────────────────────── */}
           <div className="hm-main-panel">
 
-            {/* Top grid: hourly + 7-day side by side */}
+            {/* Hourly — standalone full-width strip */}
+            {hourly && (
+              <div className="hm-section">
+                <div className="hm-section-title"><SI name="time-afternoon" />Hourly Forecast</div>
+                <HourlyRow hourly={hourly} units={settings.units} daily={daily} />
+              </div>
+            )}
+
+            {/* Top grid: 7-day (left) + Wind & UV stacked (right) */}
             <div className="hm-desktop-top-grid">
-              {hourly && (
-                <div className="hm-section">
-                  <div className="hm-section-title"><SI name="time-afternoon" />Hourly Forecast</div>
-                  <HourlyRow hourly={hourly} units={settings.units} daily={daily} />
-                </div>
-              )}
               {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={true} />}
+              <div className="hm-desktop-top-right">
+                <div className="hm-section">
+                  <div className="hm-section-title"><SI name="compass" />Wind Details</div>
+                  <WindSection c={c} daily={daily} windUnit={windUnit} />
+                </div>
+                <div className="hm-section">
+                  <div className="hm-section-title"><SI name="uv-index" />UV Index</div>
+                  <UvSection uv={uv} />
+                </div>
+              </div>
             </div>
 
-            {/* Mid grid: wind + UV + rain chance */}
+            {/* Mid grid: rain chance + pollen + air quality */}
             <div className="hm-desktop-mid-grid">
-              <div className="hm-section">
-                <div className="hm-section-title"><SI name="compass" />Wind Details</div>
-                <WindSection c={c} daily={daily} windUnit={windUnit} />
-              </div>
-
-              <div className="hm-section">
-                <div className="hm-section-title"><SI name="uv-index" />UV Index</div>
-                <UvSection uv={uv} />
-              </div>
-
               {daily?.precipitation_probability_max && (
                 <div className="hm-section">
                   <div className="hm-section-title"><SI name="raindrop" />Rain Chance — 7 Days</div>
@@ -1157,9 +1124,6 @@ export default function Home({ onOpenRadar }) {
                   </div>
                 </div>
               )}
-            </div>
-            {/* Pollen + Air Quality side by side */}
-            <div className="hm-pollen-aqi-row">
               <div className="hm-section">
                 <div className="hm-section-title"><PollenIcon />Pollen</div>
                 <PollenSection pollenData={pollenData} hasKey={hasPollenKey} />
@@ -1170,21 +1134,16 @@ export default function Home({ onOpenRadar }) {
               </div>
             </div>
 
-            {/* Bottom detail grid: Feels Like + Visibility + Dew Point + more */}
+            {/* Bottom detail grid */}
             <div className="hm-desktop-bottom-grid">
-              {/* Feels Like Detail */}
               <div className="hm-section">
                 <div className="hm-section-title"><SI name="thermometer-sun" />Feels Like</div>
                 <FeelsLikeSection c={c} tempUnit={tempUnit} />
               </div>
-
-              {/* Dew Point & Comfort */}
               <div className="hm-section">
                 <div className="hm-section-title"><SI name="humidity" />Dew Point</div>
                 <DewPointSection c={c} tempUnit={tempUnit} />
               </div>
-
-              {/* Pressure Trend */}
               <div className="hm-section">
                 <div className="hm-section-title"><SI name="barometer" />Pressure Detail</div>
                 <PressureSection c={c} hourly={hourly} />

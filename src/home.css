@@ -356,13 +356,16 @@ body:has(.hm-root),
 
 .hm-hourly-scroll {
   display: flex;
-  overflow-x: auto;
+  overflow-x: scroll;
+  max-width: 100%;
   gap: 4px;
   padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x mandatory;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 .hm-hourly-item {
@@ -910,20 +913,6 @@ body:has(.hm-root),
     margin-bottom: 14px;
   }
 
-/* REPLACE WITH */
-.hm-main-panel .hm-hourly-scroll {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-  overflow: visible;
-  padding-bottom: 8px;
-  cursor: default;
-}
-.hm-main-panel .hm-hourly-item {
-  min-width: 0;
-  padding: 4px 4px;
-}
-
   /* 7-day: expand rows nicely */
   .hm-main-panel .hm-daily-row { padding: 9px 4px; }
   .hm-main-panel .hm-daily-day { width: 64px; font-size: 14px; }
@@ -938,11 +927,23 @@ body:has(.hm-root),
   }
   .hm-desktop-top-grid > .hm-section {
     border-bottom: none;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .hm-desktop-top-grid > .hm-section:first-child {
     border-right: 1px solid var(--border);
+    min-width: 0;
+  }
+
+  /* Right column of top-grid: Wind + UV stacked vertically */
+  .hm-desktop-top-right {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .hm-desktop-top-right > .hm-section {
+    flex: 1;
+    border-bottom: none;
+    padding: 20px 28px 14px;
+  }
+  .hm-desktop-top-right > .hm-section:not(:last-child) {
+    border-bottom: 1px solid var(--border) !important;
   }
 
   /* Desktop three-column grid for wind + UV + precip */
