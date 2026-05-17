@@ -263,7 +263,7 @@ function HourlyRow({ hourly, units, daily }) {
 
 // ── 7-Day Forecast ─────────────────────────────────────────────────────────
 
-function DailyForecast({ daily, units, isDesktop }) {
+function DailyForecast({ daily, units, isDesktop, onDayClick }) {
   const tempUnit = units === 'imperial' ? '°F' : '°C'
   const today = new Date(); today.setHours(0,0,0,0)
   const allMaxes = daily.temperature_2m_max.filter(Boolean)
@@ -290,7 +290,7 @@ function DailyForecast({ daily, units, isDesktop }) {
         const barLeft = ((lo - absMin) / range) * 100
         const barWidth = ((hi - lo) / range) * 100
         return (
-          <div key={t} className="hm-daily-row">
+          <div key={t} className="hm-daily-row hm-daily-row-clickable" onClick={() => onDayClick?.(i)}>
             <div className="hm-daily-day">{formatDayShort(t)}</div>
             <div className="hm-daily-icon"><WeatherIcon name={icon} size={32} /></div>
             {prob > 10 ? <div className="hm-daily-precip"><SI name="raindrop" size={12}/>{prob}%</div> : <div className="hm-daily-precip" />}
@@ -301,6 +301,7 @@ function DailyForecast({ daily, units, isDesktop }) {
               </div>
               <span className="hm-daily-hi">{hi}{tempUnit}</span>
             </div>
+            <div className="hm-daily-chevron">›</div>
           </div>
         )
       })}
@@ -321,6 +322,104 @@ function DailyForecast({ daily, units, isDesktop }) {
       <div className="hm-section-title"><SI name="cloudy" />7-Day Forecast</div>
       {inner}
     </div>
+  )
+}
+
+// ── Day Detail Popup ───────────────────────────────────────────────────────
+
+function DayDetailPopup({ daily, hourly, dayIdx, units, onClose }) {
+  if (dayIdx == null || !daily) return null
+
+  const tempUnit = units === 'imperial' ? '°F' : '°C'
+  const windUnit = units === 'imperial' ? 'mph' : 'km/h'
+  const t = daily.time[dayIdx]
+  const dateStr = t?.split('T')[0]
+  const { icon, label } = getWeatherInfo(daily.weather_code[dayIdx])
+  const hi = Math.round(daily.temperature_2m_max[dayIdx])
+  const lo = Math.round(daily.temperature_2m_min[dayIdx])
+  const prob    = daily.precipitation_probability_max?.[dayIdx] ?? 0
+  const uv      = daily.uv_index_max?.[dayIdx] ?? null
+  const rise    = daily.sunrise?.[dayIdx]
+  const set     = daily.sunset?.[dayIdx]
+  const precip  = daily.precipitation_sum?.[dayIdx]
+  const windMax = daily.wind_speed_10m_max?.[dayIdx]
+
+  const hourlyIndices = hourly
+    ? hourly.time.reduce((acc, ht, i) => { if (ht.startsWith(dateStr)) acc.push(i); return acc }, [])
+    : []
+
+  const details = [
+    uv      != null              && { label: 'UV Index',      val: `${uv} · ${uvLabel(uv)}`,                          color: uvColor(uv) },
+    prob    > 0                  && { label: 'Rain Chance',   val: `${prob}%` },
+    precip  != null && precip > 0 && { label: 'Precipitation', val: `${precip} ${units === 'imperial' ? 'in' : 'mm'}` },
+    windMax != null              && { label: 'Wind Max',      val: `${Math.round(windMax)} ${windUnit}` },
+    rise                         && { label: 'Sunrise',       val: formatTime(rise) },
+    set                          && { label: 'Sunset',        val: formatTime(set) },
+  ].filter(Boolean)
+
+  return (
+    <>
+      <div className="ddp-overlay" onClick={onClose} />
+      <div className="ddp-popup" role="dialog" aria-modal="true">
+        <div className="ddp-header">
+          <WeatherIcon name={icon} size={36} />
+          <div className="ddp-header-info">
+            <div className="ddp-date">{formatDay(dateStr + 'T12:00')}</div>
+            <div className="ddp-condition">{label}</div>
+          </div>
+          <div className="ddp-hi-lo">
+            <span className="ddp-hi">{hi}{tempUnit}</span>
+            <span className="ddp-sep">/</span>
+            <span className="ddp-lo">{lo}{tempUnit}</span>
+          </div>
+          <button className="ddp-close" onClick={onClose} aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="ddp-body">
+          {hourlyIndices.length > 0 && (
+            <div className="ddp-section">
+              <div className="ddp-section-title">Hourly Breakdown</div>
+              <div className="ddp-hourly-scroll">
+                {hourlyIndices.map(i => {
+                  const ht = hourly.time[i]
+                  const { icon: hIcon } = getWeatherInfo(hourly.weather_code[i])
+                  const finalIcon = isDaytime(ht, daily) ? hIcon : toNightIcon(hIcon)
+                  const hProb = hourly.precipitation_probability?.[i] ?? 0
+                  const hWind = hourly.wind_speed_10m?.[i]
+                  return (
+                    <div key={ht} className="ddp-hour-item">
+                      <div className="ddp-hour-time">{formatHourShort(ht)}</div>
+                      <WeatherIcon name={finalIcon} size={26} />
+                      <div className="ddp-hour-temp">{Math.round(hourly.temperature_2m[i])}{tempUnit}</div>
+                      {hProb > 10 && <div className="ddp-hour-precip"><SI name="raindrop" size={9}/>{hProb}%</div>}
+                      {hWind != null && <div className="ddp-hour-wind">{Math.round(hWind)}<span>{windUnit}</span></div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {details.length > 0 && (
+            <div className="ddp-section">
+              <div className="ddp-section-title">Day Details</div>
+              <div className="ddp-details-grid">
+                {details.map(({ label: dl, val, color }) => (
+                  <div key={dl} className="ddp-detail">
+                    <div className="ddp-detail-label">{dl}</div>
+                    <div className="ddp-detail-val" style={color ? { color } : {}}>{val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -865,6 +964,7 @@ export default function Home({ onOpenRadar }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectedAlert, setSelectedAlert] = useState(null)
   const [aiOpen, setAiOpen] = useState(false)
+  const [selectedDayIdx, setSelectedDayIdx] = useState(null)
 
   const handleSearch = async (e) => {
     e.preventDefault()
@@ -1093,7 +1193,7 @@ export default function Home({ onOpenRadar }) {
 
             {/* Top grid: 7-day (left) + Wind & UV stacked (right) */}
             <div className="hm-desktop-top-grid">
-              {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={true} />}
+              {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={true} onDayClick={setSelectedDayIdx} />}
               <div className="hm-desktop-top-right">
                 <div className="hm-section">
                   <div className="hm-section-title"><SI name="compass" />Wind Details</div>
@@ -1162,6 +1262,15 @@ export default function Home({ onOpenRadar }) {
         onClose={() => setAiOpen(false)}
       />
       <AlertModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
+      {selectedDayIdx != null && daily && (
+        <DayDetailPopup
+          daily={daily}
+          hourly={hourly}
+          dayIdx={selectedDayIdx}
+          units={settings.units}
+          onClose={() => setSelectedDayIdx(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1201,7 +1310,7 @@ export default function Home({ onOpenRadar }) {
           </div>
         )}
 
-        {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={false} />}
+        {daily && <DailyForecast daily={daily} units={settings.units} isDesktop={false} onDayClick={setSelectedDayIdx} />}
 
         {daily && (
           <div className="hm-section">
@@ -1310,6 +1419,15 @@ export default function Home({ onOpenRadar }) {
         onClose={() => setAiOpen(false)}
       />
       <AlertModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
+      {selectedDayIdx != null && daily && (
+        <DayDetailPopup
+          daily={daily}
+          hourly={hourly}
+          dayIdx={selectedDayIdx}
+          units={settings.units}
+          onClose={() => setSelectedDayIdx(null)}
+        />
+      )}
     </div>
   )
 }

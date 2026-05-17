@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 
 const UPDATES = [
   {
-    id:      'v2.2-2026-05-10',
-    date:    'May 10, 2026',
-    expires: '06-02-2026',
-    version: 'v2.2',
-    title:   'New icons and Pollin+Air Quality features',
+    id:      'v2.3-2026-05-17',
+    date:    'May 17, 2026',
+    expires: '06-10-2026',
+    version: 'v2.3',
+    title:   'More info!',
     items: [
-      { icon: '🌐', text: 'Add a bunch of new animated icons instead of just using emojis.' },
-      { icon: '💨', text: 'Add air quality and pollen things to the homepage.' },
+      { icon: '🌐', text: 'Add a popup that gives more daily info on the 7-day chart.' },
+      { icon: '💨', text: 'Re-Organise the homepage.' },
       // { icon: '🌡️', text: 'Cleaned up some code.' },
       // { icon: '🌅', text: 'Fixed sunrise & sunset times using proper IANA timezone offset math' },
       // { icon: '🕐', text: 'Fixed all timestamp handling' },
