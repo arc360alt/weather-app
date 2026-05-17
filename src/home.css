@@ -872,6 +872,7 @@ body:has(.hm-root),
 
   /* Left sidebar — hero conditions, radar, sun/moon, key stats */
   .hm-sidebar {
+    min-height: 0; /* allow grid item to be height-constrained */
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border);
@@ -884,6 +885,7 @@ body:has(.hm-root),
 
   /* Main panel — hourly, daily, wind, UV, precip */
   .hm-main-panel {
+    min-height: 0; /* critical: makes overflow-y: auto actually scroll */
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -891,6 +893,9 @@ body:has(.hm-root),
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
+
+  /* Prevent flex children from shrinking — panel scrolls instead */
+  .hm-main-panel > * { flex-shrink: 0; }
 
   /* ── Desktop hero (sidebar top) ─────────────────────────────────────────── */
 
@@ -944,7 +949,6 @@ body:has(.hm-root),
     grid-template-columns: 1fr 1fr;
     gap: 0;
     border-bottom: 1px solid var(--border);
-    min-height: 0;
   }
   .hm-desktop-top-grid > .hm-section {
     border-bottom: none;
@@ -995,6 +999,41 @@ body:has(.hm-root),
 
   /* Hide the mobile-only radar CTA in desktop — radar button is in topbar */
   .hm-open-radar-cta { display: none; }
+}
+
+/* ── Narrow desktop (900–1199px): tighter grid layout ─────────────────────── */
+@media (min-width: 900px) and (max-width: 1199px) {
+  /* Shrink sidebar a bit */
+  .hm-desktop-body { grid-template-columns: 280px 1fr; }
+
+  /* Stack 7-day + wind/UV vertically instead of side-by-side */
+  .hm-desktop-top-grid { grid-template-columns: 1fr; }
+  .hm-desktop-top-grid > .hm-section { border-right: none; border-bottom: 1px solid var(--border); }
+
+  /* Right column: lay Wind + UV side by side instead of stacked */
+  .hm-desktop-top-right {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-top: none;
+  }
+  .hm-desktop-top-right > .hm-section {
+    flex: 1 1 260px;
+    min-width: 0;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  .hm-desktop-top-right > .hm-section:first-child {
+    border-right: 1px solid var(--border) !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  /* Mid + bottom: 2 cols instead of 3 */
+  .hm-desktop-mid-grid    { grid-template-columns: 1fr 1fr; }
+  .hm-desktop-bottom-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Medium desktop (1200–1399px): current layout but slightly tighter ────── */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .hm-desktop-body { grid-template-columns: 300px 1fr; }
 }
 
 /* Push content above the fixed mobile nav bar */
