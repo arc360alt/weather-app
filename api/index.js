@@ -1,5 +1,5 @@
-import express from 'express'
-import cors from 'cors'
+const express = require('express')
+const cors    = require('cors')
 
 const app = express()
 app.use(cors({
@@ -18,7 +18,7 @@ const GEMINI_KEY   = process.env.GEMINI_API_KEY || ''
 const MAPTILER_KEY = process.env.MAPTILER_KEY   || ''
 const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 
-// ── Frontend config (non-secret keys the browser needs) ───────────────────────
+// ── Frontend config ────────────────────────────────────────────────────────────
 
 app.get('/api/config', (_req, res) => {
   res.json({ maptilerKey: MAPTILER_KEY })
@@ -167,9 +167,8 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-export default app
+module.exports = app
 
-// Local dev only — Vercel handles its own listener
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3001
   app.listen(PORT, () => console.log(`API proxy → http://localhost:${PORT}`))
