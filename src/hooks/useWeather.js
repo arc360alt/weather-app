@@ -145,7 +145,7 @@ async function fetchOpenMeteo(lat, lon, units) {
     `?latitude=${lat}&longitude=${lon}` +
     `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,` +
     `wind_direction_10m,relative_humidity_2m,precipitation,surface_pressure,uv_index` +
-    `&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,weather_code` +
+    `&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,weather_code,cloud_cover` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,` +
     `precipitation_probability_max,wind_speed_10m_max,wind_speed_10m_min,sunrise,sunset,uv_index_max` +
     `&temperature_unit=${tempUnit}&wind_speed_unit=${windUnit}&precipitation_unit=${precipUnit}` +

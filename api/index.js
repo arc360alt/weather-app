@@ -2,154 +2,100 @@ import express from 'express'
 import cors from 'cors'
 
 const app = express()
-app.use(cors({ origin: 'https://weather.arc360hub.com' }))
+app.use(cors({ origin: ['https://weather.arc360hub.com', 'http://localhost:5173'] }))
 app.use(express.json({ limit: '2mb' }))
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
-const MODEL = process.env.OLLAMA_MODEL || 'llama3.2:1b'
+const GOOGLE_KEY   = process.env.GOOGLE_API_KEY || ''
+const GEMINI_KEY   = process.env.GEMINI_API_KEY || ''
+const MAPTILER_KEY = process.env.MAPTILER_KEY   || ''
+const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 
-const WMO_CODES = {
-  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-  45: 'Foggy', 48: 'Rime fog',
-  51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
-  61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
-  71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow', 77: 'Snow grains',
-  80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent showers',
-  85: 'Slight snow showers', 86: 'Heavy snow showers',
-  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
-}
+// ── Frontend config (non-secret keys the browser needs) ───────────────────────
 
-function wmoDesc(code) {
-  return WMO_CODES[code] ?? `Unknown (code ${code})`
-}
+app.get('/api/config', (_req, res) => {
+  res.json({ maptilerKey: MAPTILER_KEY })
+})
 
-function r(v, digits = 0) {
-  if (v == null) return 'N/A'
-  return digits === 0 ? String(Math.round(v)) : v.toFixed(digits)
-}
+// ── Google Weather ─────────────────────────────────────────────────────────────
 
-function windDir(deg) {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-  return dirs[Math.round((deg ?? 0) / 45) % 8]
-}
+app.get('/api/google/weather-current', async (req, res) => {
+  const { lat, lon } = req.query
+  if (!lat || !lon)   return res.status(400).json({ error: 'lat and lon required' })
+  if (!GOOGLE_KEY)    return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
+  try {
+    const r = await fetch(
+      `https://weather.googleapis.com/v1/currentConditions:lookup` +
+      `?key=${GOOGLE_KEY}&location.latitude=${lat}&location.longitude=${lon}`
+    )
+    const json = r.ok ? await r.json() : null
+    if (!json) return res.status(502).json({ error: `Google returned ${r.status}` })
+    res.json(json)
+  } catch (e) { res.status(502).json({ error: e.message }) }
+})
 
-function fmtHour(iso) {
-  const d = new Date(iso)
-  const h = d.getHours()
-  if (h === 0) return '12am'
-  if (h === 12) return '12pm'
-  return h > 12 ? `${h - 12}pm` : `${h}am`
-}
+app.get('/api/google/weather-forecast', async (req, res) => {
+  const { lat, lon, hours = 24 } = req.query
+  if (!lat || !lon)   return res.status(400).json({ error: 'lat and lon required' })
+  if (!GOOGLE_KEY)    return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
+  try {
+    const r = await fetch(
+      `https://weather.googleapis.com/v1/forecast/hours:lookup` +
+      `?key=${GOOGLE_KEY}&location.latitude=${lat}&location.longitude=${lon}` +
+      `&hours=${hours}&pageSize=24`
+    )
+    const json = r.ok ? await r.json() : null
+    if (!json) return res.status(502).json({ error: `Google returned ${r.status}` })
+    res.json(json)
+  } catch (e) { res.status(502).json({ error: e.message }) }
+})
 
-function fmtDay(iso) {
-  if (!iso) return 'N/A'
-  const [y, m, day] = iso.split('T')[0].split('-').map(Number)
-  return new Date(y, m - 1, day).toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric',
-  })
-}
+// ── Google Air Quality ─────────────────────────────────────────────────────────
 
-function fmtTime(iso) {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
-
-function buildSystemPrompt(weatherData) {
-  const { current: c, hourly: h, daily: d, locationName, units } = weatherData
-  const tU = units === 'imperial' ? '°F' : '°C'
-  const wU = units === 'imperial' ? 'mph' : 'km/h'
-  const pU = units === 'imperial' ? 'in' : 'mm'
-
-  const lines = [
-    `You are a friendly, casual weather assistant for ${locationName || 'this location'}.`,
-    ``,
-    `LANGUAGE RULES — follow these strictly:`,
-    `- All data is forecast data and inherently uncertain. Never say "will", "is going to", or "are expected". Always hedge: "looks like", "could see", "might", "there's a chance of", "models are showing", "should be around".`,
-    `- Write natural, grammatically correct English. Match plurals to quantities ("1 inch", not "1 inches"). Reread each sentence before finishing it.`,
-    `- Be conversational and concise — like a text from a friend who checked the weather app. Under 80 words unless asked for more.`,
-    `- Plain text only. No markdown, bullet points, or headers.`,
-    ``,
-  ]
-
-  // ── Current conditions ───────────────────────────────────────────────────
-  lines.push('=== CURRENT CONDITIONS ===')
-  lines.push(`Sky: ${wmoDesc(c?.weather_code)}`)
-  lines.push(`Temperature: ${r(c?.temperature_2m)}${tU} (feels like ${r(c?.apparent_temperature)}${tU})`)
-  lines.push(`Wind: ${r(c?.wind_speed_10m)} ${wU} from the ${windDir(c?.wind_direction_10m)}`)
-  lines.push(`Humidity: ${r(c?.relative_humidity_2m)}%`)
-  if (c?.surface_pressure != null) lines.push(`Pressure: ${r(c.surface_pressure)} hPa`)
-  if (c?.uv_index != null)         lines.push(`UV index: ${c.uv_index}`)
-  if (c?.precipitation != null)    lines.push(`Precipitation right now: ${r(c.precipitation, 2)} ${pU}`)
-
-  // ── Next 24 hours (hourly) ───────────────────────────────────────────────
-  if (h?.time?.length) {
-    const now = new Date()
-    const startIdx = Math.max(0, h.time.findIndex(t => new Date(t) >= now))
-    const end = Math.min(startIdx + 24, h.time.length)
-
-    lines.push('', '=== NEXT 24 HOURS (hourly) ===')
-    lines.push('Time   | Sky                   | Temp  | Precip% | Wind')
-
-    for (let i = startIdx; i < end; i++) {
-      const sky   = wmoDesc(h.weather_code?.[i]).padEnd(21)
-      const temp  = `${r(h.temperature_2m?.[i])}${tU}`.padEnd(5)
-      const prob  = String(h.precipitation_probability?.[i] ?? 0).padStart(3) + '%'
-      const wind  = `${r(h.wind_speed_10m?.[i])} ${wU}`
-      const label = (i === startIdx ? 'Now   ' : fmtHour(h.time[i]).padEnd(6))
-      lines.push(`${label} | ${sky} | ${temp} | ${prob}     | ${wind}`)
-    }
-  }
-
-  // ── 7-day daily forecast ─────────────────────────────────────────────────
-  if (d?.time?.length) {
-    lines.push('', '=== 7-DAY DAILY FORECAST ===')
-
-    for (let i = 0; i < Math.min(7, d.time.length); i++) {
-      const day       = fmtDay(d.time[i])
-      const sky       = wmoDesc(d.weather_code?.[i])
-      const hi        = `${r(d.temperature_2m_max?.[i])}${tU}`
-      const lo        = `${r(d.temperature_2m_min?.[i])}${tU}`
-      const probMax   = d.precipitation_probability_max?.[i] ?? 0
-      const probMin   = d.precipitation_probability_min?.[i] ?? null
-      const precip    = d.precipitation_sum?.[i] ?? 0
-      const windMax   = d.wind_speed_10m_max?.[i]
-      const windMin   = d.wind_speed_10m_min?.[i]
-      const uvMax     = d.uv_index_max?.[i]
-      const rise      = fmtTime(d.sunrise?.[i])
-      const set       = fmtTime(d.sunset?.[i])
-
-      const parts = [`${day}: ${sky}`, `High ${hi} / Low ${lo}`]
-
-      if (probMax > 5) {
-        parts.push(probMin != null && probMin !== probMax
-          ? `${probMin}–${probMax}% rain chance`
-          : `${probMax}% rain chance`)
+app.post('/api/google/air-quality', async (req, res) => {
+  const { lat, lon } = req.body
+  if (lat == null || lon == null) return res.status(400).json({ error: 'lat and lon required' })
+  if (!GOOGLE_KEY)                return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
+  try {
+    const r = await fetch(
+      `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${GOOGLE_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: { latitude: lat, longitude: lon },
+          extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION'],
+        }),
       }
-      if (precip > 0) parts.push(`${r(precip, 2)} ${pU} expected`)
+    )
+    const json = r.ok ? await r.json() : null
+    if (!json) return res.status(502).json({ error: `Google returned ${r.status}` })
+    res.json(json)
+  } catch (e) { res.status(502).json({ error: e.message }) }
+})
 
-      if (windMax != null) {
-        parts.push(windMin != null
-          ? `Wind ${r(windMin)}–${r(windMax)} ${wU}`
-          : `Wind up to ${r(windMax)} ${wU}`)
-      }
+// ── Google Pollen ──────────────────────────────────────────────────────────────
 
-      if (uvMax != null) parts.push(`UV max ${uvMax}`)
-      if (rise)          parts.push(`Sunrise ${rise}`)
-      if (set)           parts.push(`Sunset ${set}`)
+app.get('/api/google/pollen', async (req, res) => {
+  const { lat, lon, days = 5 } = req.query
+  if (!lat || !lon) return res.status(400).json({ error: 'lat and lon required' })
+  if (!GOOGLE_KEY)  return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
+  try {
+    const r = await fetch(
+      `https://pollen.googleapis.com/v1/forecast:lookup` +
+      `?key=${GOOGLE_KEY}&location.latitude=${lat}&location.longitude=${lon}&days=${days}`
+    )
+    const json = r.ok ? await r.json() : null
+    if (!json) return res.status(502).json({ error: `Google returned ${r.status}` })
+    res.json(json)
+  } catch (e) { res.status(502).json({ error: e.message }) }
+})
 
-      lines.push(parts.join(' | '))
-    }
-  }
+// ── Gemini (SSE streaming) ─────────────────────────────────────────────────────
 
-  return lines.join('\n')
-}
-
-app.post('/api/weather-ai', async (req, res) => {
-  const { messages, weatherData } = req.body
-
-  if (!Array.isArray(messages) || !messages.length || !weatherData) {
-    return res.status(400).json({ error: 'Missing required fields: messages, weatherData' })
-  }
+app.post('/api/google/gemini', async (req, res) => {
+  const { systemPrompt, contents, generationConfig } = req.body
+  if (!contents?.length) return res.status(400).json({ error: 'contents required' })
+  if (!GEMINI_KEY)       return res.status(503).json({ error: 'GEMINI_API_KEY not set on server' })
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   res.setHeader('Cache-Control', 'no-cache, no-store')
@@ -157,76 +103,61 @@ app.post('/api/weather-ai', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
 
-  const systemContent = buildSystemPrompt(weatherData)
-
   try {
-    const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: 'system', content: systemContent }, ...messages],
-        stream: true,
-        options: {
-          temperature: 0.7,
-          num_predict: 250,
-          top_p: 0.9,
-        },
-      }),
-    })
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+          contents,
+          generationConfig: generationConfig ?? { maxOutputTokens: 300, temperature: 0.7 },
+        }),
+      }
+    )
 
-    if (!ollamaRes.ok) {
-      const errText = await ollamaRes.text().catch(() => '')
-      res.write(`data: ${JSON.stringify({ error: `Ollama returned ${ollamaRes.status}: ${errText.slice(0, 200)}` })}\n\n`)
+    if (!upstream.ok) {
+      const err = await upstream.json().catch(() => ({}))
+      res.write(`data: ${JSON.stringify({ error: err?.error?.message ?? `HTTP ${upstream.status}` })}\n\n`)
       return res.end()
     }
 
-    const reader = ollamaRes.body.getReader()
+    const reader  = upstream.body.getReader()
     const decoder = new TextDecoder()
     let buf = ''
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-
       buf += decoder.decode(value, { stream: true })
       const lines = buf.split('\n')
       buf = lines.pop() ?? ''
-
       for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const chunk = JSON.parse(line)
-          if (chunk.message?.content) {
-            res.write(`data: ${JSON.stringify({ content: chunk.message.content })}\n\n`)
-          }
-          if (chunk.done) {
-            res.write('data: [DONE]\n\n')
-          }
-        } catch {
-          // skip malformed lines
-        }
+        if (!line.startsWith('data: ')) continue
+        const payload = line.slice(6).trim()
+        if (!payload || payload === '[DONE]') continue
+        res.write(`data: ${payload}\n\n`)
       }
     }
-
+    res.write('data: [DONE]\n\n')
     res.end()
-  } catch (err) {
-    const isRefused = err.code === 'ECONNREFUSED' || err.cause?.code === 'ECONNREFUSED'
-    const msg = isRefused
-      ? `Cannot connect to Ollama at ${OLLAMA_URL}. Make sure Ollama is running: ollama serve, then pull the model: ollama pull ${MODEL}`
-      : `Error: ${err.message}`
-    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`)
+  } catch (e) {
+    res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`)
     res.end()
   }
 })
 
+// ── Health ─────────────────────────────────────────────────────────────────────
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', model: MODEL, ollama: OLLAMA_URL })
+  res.json({
+    status: 'ok',
+    google:   GOOGLE_KEY   ? 'configured' : 'missing',
+    gemini:   GEMINI_KEY   ? 'configured' : 'missing',
+    maptiler: MAPTILER_KEY ? 'configured' : 'missing',
+  })
 })
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  console.log(`Weather AI API → http://localhost:${PORT}`)
-  console.log(`Ollama target  → ${OLLAMA_URL}`)
-  console.log(`Model          → ${MODEL}`)
-})
+app.listen(PORT, () => console.log(`API proxy → http://localhost:${PORT}`))

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const GEMINI_MODEL = 'gemini-2.5-flash-lite'
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`
+const GEMINI_PROXY = '/api/google/gemini'
 const INIT_PROMPT = "Give me a brief summary of today's conditions and what to expect this week. Keep it to 2-3 sentences."
 const REFRESH_MS = 30 * 60 * 1000
 
@@ -141,7 +140,6 @@ export default function WeatherAIPopup({ weatherData, pollenData, aqData, locati
   const lastOpenedAt = useRef(null)
   const fullHistoryRef = useRef([])
 
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -160,11 +158,6 @@ export default function WeatherAIPopup({ weatherData, pollenData, aqData, locati
   useEffect(() => () => { abortRef.current?.abort() }, [])
 
   const streamResponse = useCallback(async (apiMessages, appendUserBubble) => {
-    if (!apiKey) {
-      setErrorMsg('No Gemini API key found. Add VITE_GEMINI_API_KEY to your .env file.')
-      return
-    }
-
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     const { signal } = abortRef.current
@@ -190,12 +183,12 @@ export default function WeatherAIPopup({ weatherData, pollenData, aqData, locati
     }))
 
     try {
-      const res = await fetch(`${GEMINI_URL}&key=${apiKey}`, {
+      const res = await fetch(GEMINI_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal,
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
+          systemPrompt,
           contents,
           generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
         }),
@@ -240,7 +233,7 @@ export default function WeatherAIPopup({ weatherData, pollenData, aqData, locati
       setIsStreaming(false)
       setLiveText('')
     }
-  }, [weatherData, pollenData, aqData, locationName, units, apiKey])
+  }, [weatherData, pollenData, aqData, locationName, units])
 
   const runInit = useCallback(() => {
     const initMsg = { role: 'user', content: INIT_PROMPT }

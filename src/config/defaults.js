@@ -35,6 +35,9 @@ export const DEFAULT_SETTINGS = {
   weatherProvider: 'nws',  // 'openmeteo' | 'openweathermap'
   owmApiKey: '',
   radarProvider: 'rainviewer',
+
+  // AQI provider
+  aqiProvider: 'google',   // 'google' | 'openmeteo'
 }
 
 export const MAP_STYLES = [
@@ -47,6 +50,7 @@ export const MAP_STYLES = [
 
 export const WEATHER_LAYERS = [
   { label: 'Radar',         value: 'radar' },
+  { label: 'Cloud Cover (BETA)',   value: 'cloud-cover' },
   { label: 'Wind',          value: 'wind' },
   { label: 'Precipitation', value: 'precipitation' },
   { label: 'Temperature',   value: 'temperature' },

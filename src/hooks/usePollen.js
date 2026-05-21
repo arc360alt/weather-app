@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 
-const API_KEY = import.meta.env.VITE_GOOGLE_POLLEN_KEY
-
 function parse(json) {
   if (!json?.dailyInfo?.length) return null
   const get = (types, code) => types?.find(t => t.code === code) ?? null
@@ -30,13 +28,10 @@ export function usePollen(lat, lon) {
   const [data, setData] = useState(null)
 
   useEffect(() => {
-    if (lat == null || lon == null || !API_KEY) { setData(null); return }
-    fetch(
-      `https://pollen.googleapis.com/v1/forecast:lookup` +
-      `?key=${encodeURIComponent(API_KEY)}&location.latitude=${lat}&location.longitude=${lon}&days=5`
-    )
+    if (lat == null || lon == null) { setData(null); return }
+    fetch(`/api/google/pollen?lat=${lat}&lon=${lon}&days=5`)
       .then(r => r.ok ? r.json() : null)
-      .then(json => setData(json ? parse(json) : null))
+      .then(json => setData(json && !json.error ? parse(json) : null))
       .catch(() => setData(null))
   }, [lat, lon])
 

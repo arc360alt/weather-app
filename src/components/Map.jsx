@@ -23,10 +23,11 @@ const NWS_WMS_LAYER_ID    = 'nws-warning-raster-fallback-layer'
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
+let _maptilerKey = ''
+
 function getStyleUrl(style) {
-  const key = import.meta.env.VITE_MAPTILER_KEY
-  const ids  = { 'streets-v2': 'streets-v2', satellite: 'satellite', 'topo-v2': 'topo-v2', backdrop: 'backdrop', ocean: 'ocean' }
-  return `https://api.maptiler.com/maps/${ids[style] ?? 'streets-v2'}/style.json?key=${key}`
+  const ids = { 'streets-v2': 'streets-v2', satellite: 'satellite', 'topo-v2': 'topo-v2', backdrop: 'backdrop', ocean: 'ocean' }
+  return `https://api.maptiler.com/maps/${ids[style] ?? 'streets-v2'}/style.json?key=${_maptilerKey}`
 }
 
 function buildMaptilerFrames(startSec, endSec) {
@@ -82,6 +83,19 @@ async function fetchRainviewerFrames() {
 
 function rvTileUrl(host, path) {
   return `${host}${path}/512/{z}/{x}/{y}/6/1_1.png`
+}
+
+function satTileUrl(host, path) {
+  return `${host}${path}/512/{z}/{x}/{y}/0/0_0.png`
+}
+
+async function fetchSatelliteFrames() {
+  const res  = await fetch(RAINVIEWER_API)
+  const json = await res.json()
+  const host = 'https://stormcastapi.arc360hub.com'
+  const infrared = json.satellite?.infrared ?? []
+  const frames = infrared.map(f => ({ time: f.time, path: f.path, type: 'past', layerId: `sat-${f.time}` }))
+  return { host, frames }
 }
 
 function clampBboxToUs([west, south, east, north]) {
@@ -317,22 +331,37 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
   useEffect(() => {
     if (!containerRef.current) return
-    maptilersdk.config.apiKey = import.meta.env.VITE_MAPTILER_KEY
-    const map = new maptilersdk.Map({
-      container:          containerRef.current,
-      style:              getStyleUrl(settings.mapStyle),
-      center:             [settings.lon, settings.lat],
-      zoom:               6,
-      attributionControl: true,
-    })
-    mapRef.current = map
-    map.once('idle', () => { wireControls(); setMapReady(true) })
-    map.on('click', e => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
+    let cancelled = false
+
+    async function init() {
+      try {
+        const cfg = await fetch('/api/config').then(r => r.json())
+        _maptilerKey = cfg.maptilerKey || ''
+      } catch {}
+
+      if (cancelled || !containerRef.current) return
+
+      maptilersdk.config.apiKey = _maptilerKey
+      const map = new maptilersdk.Map({
+        container:          containerRef.current,
+        style:              getStyleUrl(settings.mapStyle),
+        center:             [settings.lon, settings.lat],
+        zoom:               6,
+        attributionControl: true,
+      })
+      mapRef.current = map
+      map.once('idle', () => { wireControls(); setMapReady(true) })
+      map.on('click', e => onMapClick?.(e.lngLat.lat, e.lngLat.lng))
+    }
+
+    init()
+
     return () => {
+      cancelled = true
       stopLoop()
       stopRefreshTimer()
       stopNwsWarningsTimer()
-      map.remove()
+      mapRef.current?.remove()
       mapRef.current = null
     }
   }, []) // eslint-disable-line
@@ -362,7 +391,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     markerRef.current = new maptilersdk.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([settings.lon, settings.lat])
       .addTo(map)
-  }, [settings.lat, settings.lon])
+  }, [settings.lat, settings.lon, mapReady]) // eslint-disable-line
 
   // ── Map style swap ────────────────────────────────────────────────────────
 
@@ -663,12 +692,12 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     return best
   }
 
-  function startRefreshTimer(provider) {
+  function startRefreshTimer(type, provider) {
     stopRefreshTimer()
     refreshTimerRef.current = setInterval(() => {
       const wasPlaying = !pausedRef.current
       dropAllLayers()
-      loadLayer('radar', provider).then(() => { if (wasPlaying) play() })
+      loadLayer(type, provider).then(() => { if (wasPlaying) play() })
     }, RADAR_REFRESH_MS)
   }
 
@@ -988,6 +1017,45 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
     // Returns true if a newer dropAllLayers() or loadLayer() has started
     const stale = () => sessionRef.current !== mySession || !mapRef.current
 
+    // ── Path 0: Cloud Cover (satellite tiles from StormCast API) ─────────────
+
+    if (type === 'cloud-cover') {
+      let satData
+      try { satData = await fetchSatelliteFrames() }
+      catch (e) { console.error('[Cloud Cover] fetch failed:', e); return }
+      if (stale()) return
+
+      const { host, frames: satFrames } = satData
+      if (!satFrames.length) return
+
+      const rawFrames = satFrames.map(f => ({
+        ...f,
+        tileUrl:         satTileUrl(host, f.path),
+        tileUrlTemplate: satTileUrl(host, f.path),
+        tileSize:        512,
+      }))
+
+      if (stale()) return
+      bringNwsWarningsToFront()
+
+      const nowSec   = Date.now() / 1000
+      const startIdx = rawFrames.reduce((best, f, i) =>
+        f.time <= nowSec ? i : best
+      , 0)
+
+      if (stale()) { dropAllLayers(); return }
+
+      framesRef.current = rawFrames
+      indexRef.current  = startIdx
+      readyRef.current  = true
+
+      goToFrame(startIdx)
+      onFramesRef.current?.(rawFrames, startIdx)
+      startRefreshTimer('cloud-cover', 'rainviewer')
+      if (animateRadarRef.current) play()
+      return
+    }
+
     // ── Path 1: MapTiler weather layer (wind/precip/temp/pressure/maptiler radar) ──
 
     if (type !== 'radar' || provider === 'maptiler') {
@@ -1039,7 +1107,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
       goToFrame(indexRef.current)
       onFramesRef.current?.(frames, indexRef.current)
 
-      if (type === 'radar') startRefreshTimer(provider)
+      if (type === 'radar') startRefreshTimer('radar', provider)
       if (animateRadarRef.current) play()
       return
     }
@@ -1093,7 +1161,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
       goToFrame(indexRef.current)
       onFramesRef.current?.(rawFrames, indexRef.current)
-      startRefreshTimer(provider)
+      startRefreshTimer('radar', provider)
       if (animateRadarRef.current) play()
 
       // If fallback legacy timeline is active (past-only), append bundled custom nowcast.
@@ -1139,7 +1207,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
       goToFrame(startIdx)
       onFramesRef.current?.(rawFrames, startIdx)
-      startRefreshTimer(provider)
+      startRefreshTimer('radar', provider)
       if (animateRadarRef.current) play()
 
       // Extend RainViewer with custom nowcast in background.

@@ -408,6 +408,18 @@ export default function SettingsPanel({ settings, onUpdate, onReset, externalOpe
             <p className="settings-hint">
               Avg shows a representative daily chance. Max is the highest 12-hr window, Min is the lowest.
             </p>
+            <Row label="AQI Source">
+              <div className="btn-group">
+                <button
+                  className={`btn-option ${(settings.aqiProvider ?? 'google') === 'google' ? 'active' : ''}`}
+                  onClick={() => set('aqiProvider', 'google')}
+                >Google</button>
+                <button
+                  className={`btn-option ${settings.aqiProvider === 'openmeteo' ? 'active' : ''}`}
+                  onClick={() => set('aqiProvider', 'openmeteo')}
+                >Open-Meteo</button>
+              </div>
+            </Row>
             <Row label="Hourly Chart">
               <Toggle checked={settings.showHourlyChart} onChange={v => set('showHourlyChart', v)} />
             </Row>

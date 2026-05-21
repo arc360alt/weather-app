@@ -4,6 +4,7 @@ import { useWeather } from './hooks/useWeather'
 import { useAlerts } from './hooks/useAlerts'
 import { usePollen } from './hooks/usePollen'
 import { useAirQuality, aqiInfo } from './hooks/useAirQuality'
+import { useCloudCover } from './hooks/useCloudCover'
 import { WEATHER_CODES } from './config/defaults'
 import AlertModal from './components/AlertModal'
 import WeatherAIPopup from './components/WeatherAIPopup'
@@ -644,7 +645,8 @@ function UvSection({ uv }) {
         <span className="hm-uv-num">{uv}</span>
         <span className="hm-uv-text">{uvLabel(uv)}</span>
       </div>
-      {uv <= 2 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Low risk, enjoy the sun</div>}
+      {uv <= 1 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/>Enjoy the moonlight</div>}
+      {uv > 1 && uv <= 2 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Low risk, enjoy the sun</div>}
       {uv > 2 && uv <= 5 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Wear sunscreen and sunglasses</div>}
       {uv > 5 && uv <= 7 && <div className="hm-uv-tip"><SI name="uv-index" size={14}/> Wear sunscreen and sunglasses, seek shade when necessary</div>}
       {uv > 7 && uv <= 10 && <div className="hm-uv-tip"><SI name="uv-index-alert" size={14}/> Seek shade during midday hours</div>}
@@ -667,10 +669,7 @@ function pollenCategoryColor(category) {
   }
 }
 
-function PollenSection({ pollenData, hasKey }) {
-  if (!hasKey) {
-    return <div className="hm-pollen-na">Add a Google API key in Settings → API Keys to enable pollen data.</div>
-  }
+function PollenSection({ pollenData }) {
   if (!pollenData?.current) {
     return <div className="hm-pollen-na">Loading pollen data…</div>
   }
@@ -722,10 +721,7 @@ const PollenIcon = () => (
   </svg>
 )
 
-const hasAqKey = !!import.meta.env.VITE_GOOGLE_POLLEN_KEY
-
 function AirQualitySection({ aqData }) {
-  if (!hasAqKey) return <div className="hm-pollen-na">Add VITE_GOOGLE_POLLEN_KEY to .env to enable air quality data.</div>
   if (!aqData) return <div className="hm-pollen-na">Loading air quality…</div>
   const { aqi, label, color, pm25, pm10, no2, o3 } = aqData
   const stats = [
@@ -947,6 +943,108 @@ function PressureSection({ c, hourly }) {
   )
 }
 
+// ── Cloud Cover Section ────────────────────────────────────────────────────
+
+function cloudSkyLabel(pct) {
+  if (pct == null) return '—'
+  if (pct <= 10)  return 'Clear Sky'
+  if (pct <= 30)  return 'Mostly Clear'
+  if (pct <= 60)  return 'Partly Cloudy'
+  if (pct <= 85)  return 'Mostly Cloudy'
+  return 'Overcast'
+}
+
+function cloudSkyColor(pct) {
+  if (pct == null) return '#6b8db5'
+  if (pct <= 10)  return '#fbbf24'
+  if (pct <= 30)  return '#60a5fa'
+  if (pct <= 60)  return '#94a3b8'
+  return '#6b7280'
+}
+
+const CloudCoverIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7 }}>
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
+  </svg>
+)
+
+function formatHourInZone(isoString, timezone) {
+  if (!isoString) return ''
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hour12: true,
+      timeZone: timezone,
+    }).format(new Date(isoString)).replace(' ', '').toLowerCase()
+  } catch {
+    return formatHourShort(isoString)
+  }
+}
+
+function CloudCoverSection({ ccData }) {
+  const currentPct = ccData?.currentCloudCover ?? null
+  const chartVals  = ccData?.chartValues  ?? []
+  const chartTimes = ccData?.chartTimes   ?? []
+  const timezone   = ccData?.timezone     ?? 'UTC'
+
+  const color = cloudSkyColor(currentPct)
+
+  if (!ccData) return <div className="hm-cloud-na">Loading cloud cover…</div>
+
+  // SVG area chart
+  let linePath = '', areaPath = ''
+  if (chartVals.length > 1) {
+    const W = 200, H = 44
+    const pts = chartVals.map((v, i) => [
+      (i / (chartVals.length - 1)) * W,
+      H - ((v ?? 0) / 100) * H,
+    ])
+    linePath = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
+    areaPath = `${linePath} L${pts[pts.length - 1][0].toFixed(1)} ${H} L0 ${H} Z`
+  }
+
+  const labelIdxs = [0, 6, 12, 18, chartVals.length - 1].filter((i, pos, arr) =>
+    i < chartVals.length && arr.indexOf(i) === pos
+  )
+
+  return (
+    <div className="hm-cloud-card">
+      <div className="hm-cloud-main">
+        <div className="hm-cloud-pct" style={{ color }}>
+          {currentPct != null ? `${Math.round(currentPct)}%` : '—'}
+        </div>
+        <div className="hm-cloud-label">{cloudSkyLabel(currentPct)}</div>
+      </div>
+      {chartVals.length > 1 && (
+        <div className="hm-cloud-chart-wrap">
+          <svg viewBox="0 0 200 44" preserveAspectRatio="none" className="hm-cloud-svg">
+            <defs>
+              <linearGradient id="cc-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.4"/>
+                <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.04"/>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="22" x2="200" y2="22" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+            <path d={areaPath} fill="url(#cc-fill)"/>
+            <path d={linePath} fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div className="hm-cloud-time-row">
+            {labelIdxs.map(i => (
+              <span
+                key={i}
+                className="hm-cloud-time-label"
+                style={{ left: `${(i / (chartVals.length - 1)) * 100}%` }}
+              >
+                {formatHourInZone(chartTimes[i], timezone)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Home Component ────────────────────────────────────────────────────
 
 export default function Home({ onOpenRadar }) {
@@ -1021,8 +1119,8 @@ export default function Home({ onOpenRadar }) {
   const isNws    = settings.weatherProvider === 'nws'
   const uv        = daily?.uv_index_max?.[0] ?? null
   const pollenData   = usePollen(settings.lat, settings.lon)
-  const hasPollenKey = !!import.meta.env.VITE_GOOGLE_POLLEN_KEY
-  const aqData       = useAirQuality(settings.lat, settings.lon)
+  const aqData       = useAirQuality(settings.lat, settings.lon, settings.aqiProvider ?? 'google')
+  const ccData       = useCloudCover(settings.lat, settings.lon)
 
   // ── Shared top bar & search (identical on both layouts) ──────────────────
 
@@ -1042,7 +1140,7 @@ export default function Home({ onOpenRadar }) {
           aria-expanded={aiOpen}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M14.0416 16.2219L13.5749 17.8284C13.1036 19.4508 12.868 20.262 12.5051 20.4675C12.1917 20.6449 11.8083 20.6449 11.4949 20.4675C11.132 20.262 10.8964 19.4508 10.4251 17.8284L9.95843 16.2219L9.95843 16.2219C9.77921 15.6049 9.68961 15.2965 9.52195 15.043C9.37356 14.8186 9.18142 14.6264 8.95705 14.478C8.70355 14.3104 8.39507 14.2208 7.77812 14.0416L7.77811 14.0416L6.1716 13.5749C4.5492 13.1036 3.738 12.868 3.5325 12.5051C3.35507 12.1917 3.35507 11.8083 3.5325 11.4949C3.738 11.132 4.5492 10.8964 6.1716 10.4251L7.77811 9.95843L7.77812 9.95843C8.39507 9.77922 8.70355 9.68961 8.95705 9.52195C9.18142 9.37356 9.37356 9.18142 9.52195 8.95705C9.68961 8.70355 9.77921 8.39507 9.95843 7.77812L9.95843 7.77811L10.4251 6.1716C10.8964 4.5492 11.132 3.738 11.4949 3.5325C11.8083 3.35507 12.1917 3.35507 12.5051 3.5325C12.868 3.738 13.1036 4.5492 13.5749 6.1716L14.0416 7.77811L14.0416 7.77812C14.2208 8.39507 14.3104 8.70355 14.478 8.95705C14.6264 9.18142 14.8186 9.37356 15.043 9.52195C15.2965 9.68961 15.6049 9.77921 16.2219 9.95843L16.2219 9.95843L17.8284 10.4251C19.4508 10.8964 20.262 11.132 20.4675 11.4949C20.6449 11.8083 20.6449 12.1917 20.4675 12.5051C20.262 12.868 19.4508 13.1036 17.8284 13.5749L16.2219 14.0416L16.2219 14.0416C15.6049 14.2208 15.2965 14.3104 15.043 14.478C14.8186 14.6264 14.6264 14.8186 14.478 15.043C14.3104 15.2965 14.2208 15.6049 14.0416 16.2219L14.0416 16.2219Z" stroke="#F5F5F5" stroke-width="1.5"/>
+          <path d="M14.0416 16.2219L13.5749 17.8284C13.1036 19.4508 12.868 20.262 12.5051 20.4675C12.1917 20.6449 11.8083 20.6449 11.4949 20.4675C11.132 20.262 10.8964 19.4508 10.4251 17.8284L9.95843 16.2219L9.95843 16.2219C9.77921 15.6049 9.68961 15.2965 9.52195 15.043C9.37356 14.8186 9.18142 14.6264 8.95705 14.478C8.70355 14.3104 8.39507 14.2208 7.77812 14.0416L7.77811 14.0416L6.1716 13.5749C4.5492 13.1036 3.738 12.868 3.5325 12.5051C3.35507 12.1917 3.35507 11.8083 3.5325 11.4949C3.738 11.132 4.5492 10.8964 6.1716 10.4251L7.77811 9.95843L7.77812 9.95843C8.39507 9.77922 8.70355 9.68961 8.95705 9.52195C9.18142 9.37356 9.37356 9.18142 9.52195 8.95705C9.68961 8.70355 9.77921 8.39507 9.95843 7.77812L9.95843 7.77811L10.4251 6.1716C10.8964 4.5492 11.132 3.738 11.4949 3.5325C11.8083 3.35507 12.1917 3.35507 12.5051 3.5325C12.868 3.738 13.1036 4.5492 13.5749 6.1716L14.0416 7.77811L14.0416 7.77812C14.2208 8.39507 14.3104 8.70355 14.478 8.95705C14.6264 9.18142 14.8186 9.37356 15.043 9.52195C15.2965 9.68961 15.6049 9.77921 16.2219 9.95843L16.2219 9.95843L17.8284 10.4251C19.4508 10.8964 20.262 11.132 20.4675 11.4949C20.6449 11.8083 20.6449 12.1917 20.4675 12.5051C20.262 12.868 19.4508 13.1036 17.8284 13.5749L16.2219 14.0416L16.2219 14.0416C15.6049 14.2208 15.2965 14.3104 15.043 14.478C14.8186 14.6264 14.6264 14.8186 14.478 15.043C14.3104 15.2965 14.2208 15.6049 14.0416 16.2219L14.0416 16.2219Z" stroke="#F5F5F5" strokeWidth="1.5"/>
           <path d="M5.42282 5.94949L5.01129 7.20368C4.92849 7.45603 4.57151 7.45603 4.48871 7.20368L4.07718 5.94949C3.99537 5.70017 3.79983 5.50463 3.55051 5.42282L2.29632 5.01129C2.04397 4.92849 2.04397 4.57151 2.29632 4.48871L3.55051 4.07718C3.79983 3.99537 3.99537 3.79983 4.07718 3.55051L4.48871 2.29632C4.57151 2.04397 4.92849 2.04397 5.01129 2.29632L5.42282 3.55051C5.50463 3.79983 5.70017 3.99537 5.94949 4.07718L7.20368 4.48871C7.45603 4.57151 7.45603 4.92849 7.20368 5.01129L5.94949 5.42282C5.70017 5.50463 5.50463 5.70017 5.42282 5.94949Z" fill="#0F8BFF"/>
           <path d="M19.9228 20.4495L19.5113 21.7037C19.4285 21.956 19.0715 21.956 18.9887 21.7037L18.5772 20.4495C18.4954 20.2002 18.2998 20.0046 18.0505 19.9228L16.7963 19.5113C16.544 19.4285 16.544 19.0715 16.7963 18.9887L18.0505 18.5772C18.2998 18.4954 18.4954 18.2998 18.5772 18.0505L18.9887 16.7963C19.0715 16.544 19.4285 16.544 19.5113 16.7963L19.9228 18.0505C20.0046 18.2998 20.2002 18.4954 20.4495 18.5772L21.7037 18.9887C21.956 19.0715 21.956 19.4285 21.7037 19.5113L20.4495 19.9228C20.2002 20.0046 20.0046 20.2002 19.9228 20.4495Z" fill="#0F8BFF"/>
           </svg>
@@ -1226,7 +1324,7 @@ export default function Home({ onOpenRadar }) {
               )}
               <div className="hm-section">
                 <div className="hm-section-title"><PollenIcon />Pollen</div>
-                <PollenSection pollenData={pollenData} hasKey={hasPollenKey} />
+                <PollenSection pollenData={pollenData} />
               </div>
               <div className="hm-section">
                 <div className="hm-section-title"><AqiIcon />Air Quality</div>
@@ -1247,6 +1345,10 @@ export default function Home({ onOpenRadar }) {
               <div className="hm-section">
                 <div className="hm-section-title"><SI name="barometer" />Pressure Detail</div>
                 <PressureSection c={c} hourly={hourly} />
+              </div>
+              <div className="hm-section">
+                <div className="hm-section-title"><CloudCoverIcon />Cloud Cover (POTENTIALY INACURATE)</div>
+                <CloudCoverSection ccData={ccData} />
               </div>
             </div>
           </div>
@@ -1377,6 +1479,11 @@ export default function Home({ onOpenRadar }) {
           <PressureSection c={c} hourly={hourly} />
         </div>
 
+        <div className="hm-section">
+          <div className="hm-section-title"><CloudCoverIcon />Cloud Cover (POTENTIALY INACURATE)</div>
+          <CloudCoverSection ccData={ccData} />
+        </div>
+
         {uv != null && (
           <div className="hm-section">
             <div className="hm-section-title"><SI name="uv-index" />UV Index</div>
@@ -1386,7 +1493,7 @@ export default function Home({ onOpenRadar }) {
 
         <div className="hm-section">
           <div className="hm-section-title"><PollenIcon />Pollen</div>
-          <PollenSection pollenData={pollenData} hasKey={hasPollenKey} />
+          <PollenSection pollenData={pollenData} />
         </div>
 
         <div className="hm-section">
