@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { API_BASE } from '../config/api'
 
-const GEMINI_PROXY = '/api/google/gemini'
+const GEMINI_PROXY = `${API_BASE}/api/google/gemini`
 const INIT_PROMPT = "Give me a brief summary of today's conditions and what to expect this week. Keep it to 2-3 sentences."
 const REFRESH_MS = 30 * 60 * 1000
 

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import { API_BASE } from '../config/api'
 
 async function fetchGoogle(lat, lon) {
   const [curRes, fcRes] = await Promise.all([
-    fetch(`/api/google/weather-current?lat=${lat}&lon=${lon}`),
-    fetch(`/api/google/weather-forecast?lat=${lat}&lon=${lon}&hours=24`),
+    fetch(`${API_BASE}/api/google/weather-current?lat=${lat}&lon=${lon}`),
+    fetch(`${API_BASE}/api/google/weather-forecast?lat=${lat}&lon=${lon}&hours=24`),
   ])
   const cur = curRes.ok ? await curRes.json() : null
   const fc  = fcRes.ok  ? await fcRes.json()  : null

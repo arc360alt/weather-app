@@ -159,5 +159,10 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`API proxy → http://localhost:${PORT}`))
+export default app
+
+// Local dev only — Vercel handles its own listener
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3001
+  app.listen(PORT, () => console.log(`API proxy → http://localhost:${PORT}`))
+}

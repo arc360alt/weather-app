@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_BASE } from '../config/api'
 
 export function aqiInfo(aqi) {
   if (aqi == null) return { label: 'N/A', color: '#6b8db5' }
@@ -11,7 +12,7 @@ export function aqiInfo(aqi) {
 }
 
 async function fetchGoogle(lat, lon) {
-  const res = await fetch('/api/google/air-quality', {
+  const res = await fetch(`${API_BASE}/api/google/air-quality`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ lat, lon }),

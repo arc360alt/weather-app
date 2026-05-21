@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
+import { API_BASE } from '../config/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -335,7 +336,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
     async function init() {
       try {
-        const cfg = await fetch('/api/config').then(r => r.json())
+        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json())
         _maptilerKey = cfg.maptilerKey || ''
       } catch {}
 
