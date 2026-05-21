@@ -20,13 +20,13 @@ const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 
 // ── Frontend config ────────────────────────────────────────────────────────────
 
-app.get('/api/config', (_req, res) => {
+app.get('/config', (_req, res) => {
   res.json({ maptilerKey: MAPTILER_KEY })
 })
 
 // ── Google Weather ─────────────────────────────────────────────────────────────
 
-app.get('/api/google/weather-current', async (req, res) => {
+app.get('/google/weather-current', async (req, res) => {
   const { lat, lon } = req.query
   if (!lat || !lon)   return res.status(400).json({ error: 'lat and lon required' })
   if (!GOOGLE_KEY)    return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
@@ -41,7 +41,7 @@ app.get('/api/google/weather-current', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }) }
 })
 
-app.get('/api/google/weather-forecast', async (req, res) => {
+app.get('/google/weather-forecast', async (req, res) => {
   const { lat, lon, hours = 24 } = req.query
   if (!lat || !lon)   return res.status(400).json({ error: 'lat and lon required' })
   if (!GOOGLE_KEY)    return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
@@ -59,7 +59,7 @@ app.get('/api/google/weather-forecast', async (req, res) => {
 
 // ── Google Air Quality ─────────────────────────────────────────────────────────
 
-app.post('/api/google/air-quality', async (req, res) => {
+app.post('/google/air-quality', async (req, res) => {
   const { lat, lon } = req.body
   if (lat == null || lon == null) return res.status(400).json({ error: 'lat and lon required' })
   if (!GOOGLE_KEY)                return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
@@ -83,7 +83,7 @@ app.post('/api/google/air-quality', async (req, res) => {
 
 // ── Google Pollen ──────────────────────────────────────────────────────────────
 
-app.get('/api/google/pollen', async (req, res) => {
+app.get('/google/pollen', async (req, res) => {
   const { lat, lon, days = 5 } = req.query
   if (!lat || !lon) return res.status(400).json({ error: 'lat and lon required' })
   if (!GOOGLE_KEY)  return res.status(503).json({ error: 'GOOGLE_API_KEY not set on server' })
@@ -100,7 +100,7 @@ app.get('/api/google/pollen', async (req, res) => {
 
 // ── Gemini (SSE streaming) ─────────────────────────────────────────────────────
 
-app.post('/api/google/gemini', async (req, res) => {
+app.post('/google/gemini', async (req, res) => {
   const { systemPrompt, contents, generationConfig } = req.body
   if (!contents?.length) return res.status(400).json({ error: 'contents required' })
   if (!GEMINI_KEY)       return res.status(503).json({ error: 'GEMINI_API_KEY not set on server' })
@@ -158,7 +158,7 @@ app.post('/api/google/gemini', async (req, res) => {
 
 // ── Health ─────────────────────────────────────────────────────────────────────
 
-app.get('/api/health', (_req, res) => {
+app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     google:   GOOGLE_KEY   ? 'configured' : 'missing',

@@ -336,7 +336,7 @@ export default function Map({ settings = {}, onMapClick, onFramesChange, onPlayi
 
     async function init() {
       try {
-        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json())
+        const cfg = await fetch(`${API_BASE}/config`).then(r => r.json())
         _maptilerKey = cfg.maptilerKey || ''
       } catch {}
 

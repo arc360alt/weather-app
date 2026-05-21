@@ -30,7 +30,7 @@ export function usePollen(lat, lon) {
 
   useEffect(() => {
     if (lat == null || lon == null) { setData(null); return }
-    fetch(`${API_BASE}/api/google/pollen?lat=${lat}&lon=${lon}&days=5`)
+    fetch(`${API_BASE}/google/pollen?lat=${lat}&lon=${lon}&days=5`)
       .then(r => r.ok ? r.json() : null)
       .then(json => setData(json && !json.error ? parse(json) : null))
       .catch(() => setData(null))

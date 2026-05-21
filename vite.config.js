@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',
   server: {
     proxy: {
-      '/api': 'https://svproxy.arc360hub.com',
+      '^/(google|config|health)': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
 })

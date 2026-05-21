@@ -12,7 +12,7 @@ export function aqiInfo(aqi) {
 }
 
 async function fetchGoogle(lat, lon) {
-  const res = await fetch(`${API_BASE}/api/google/air-quality`, {
+  const res = await fetch(`${API_BASE}/google/air-quality`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ lat, lon }),
