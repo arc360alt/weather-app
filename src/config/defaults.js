@@ -2,7 +2,7 @@
 export const DEFAULT_SETTINGS = {
   // Location
   lat: 41.8781,
-  lon: 87.6298,
+  lon: -87.6298,
   locationName: 'Chicago, IL',
 
   // Map appearance
